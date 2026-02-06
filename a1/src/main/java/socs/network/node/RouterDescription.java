@@ -12,7 +12,7 @@ public class RouterDescription {
   public void print(){
     System.out.println("========================================");
     System.out.printf("Process IP     : %s%n", processIPAddress);
-    System.out.printf("Process port   : %h%n", processPortNumber);
+    System.out.printf("Process port   : %d%n", processPortNumber);
     System.out.printf("Simulated IP   : %s%n", simulatedIPAddress);
     System.out.println("========================================");
   }

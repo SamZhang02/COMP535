@@ -16,6 +16,8 @@ public class Router {
   Link[] ports = new Link[4];
 
   public Router(Configuration config) {
+    rd.processIPAddress = config.getString("socs.network.router.pip");
+    rd.processPortNumber = config.getShort("socs.network.router.port");
     rd.simulatedIPAddress = config.getString("socs.network.router.ip");
     lsd = new LinkStateDatabase(rd);
   }
