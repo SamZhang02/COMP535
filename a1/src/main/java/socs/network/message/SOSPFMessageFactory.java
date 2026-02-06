@@ -5,29 +5,30 @@ import socs.network.node.RouterDescription;
 import java.util.UUID;
 
 public class SOSPFMessageFactory {
-    public static SOSPFPacket createHello(RouterDescription srcRd, String dstSimulatedIp) {
-        return basePacket(srcRd, dstSimulatedIp)
-                .setSospfType(SOSPFPacket.SOSPFType.HELLO)
-                .setNeighborID(srcRd.simulatedIPAddress)
-                .setRouterID(srcRd.simulatedIPAddress)
-                .createSOSPFPacket();
-    }
+  public static SOSPFPacket createHello(RouterDescription srcRd, String dstSimulatedIp, int weight) {
+    return basePacket(srcRd, dstSimulatedIp)
+            .setSospfType(SOSPFPacket.SOSPFType.HELLO)
+            .setNeighborID(srcRd.simulatedIPAddress)
+            .setRouterID(srcRd.simulatedIPAddress)
+            .setMessage(String.valueOf(weight))
+            .createSOSPFPacket();
+  }
 
-    public static SOSPFPacket createAttachResponse(RouterDescription srcRd, String dstSimulatedIp, boolean accepted) {
-        return basePacket(srcRd, dstSimulatedIp)
-                .setSospfType(SOSPFPacket.SOSPFType.HELLO)
-                .setAccepted(accepted)
-                .createSOSPFPacket();
-    }
+  public static SOSPFPacket createAttachResponse(RouterDescription srcRd, String dstSimulatedIp, boolean accepted) {
+    return basePacket(srcRd, dstSimulatedIp)
+            .setSospfType(SOSPFPacket.SOSPFType.HELLO)
+            .setAccepted(accepted)
+            .createSOSPFPacket();
+  }
 
-    private static SOSPFPacketBuilder basePacket(RouterDescription rd, String dstIP) {
-        return new SOSPFPacketBuilder()
-                .setRequestId(UUID.randomUUID().toString())
-                .setSrcIP(rd.simulatedIPAddress)
-                .setSrcProcessIP(rd.processIPAddress)
-                .setSrcProcessPort(rd.processPortNumber)
-                .setDstIP(dstIP);
-    }
+  private static SOSPFPacketBuilder basePacket(RouterDescription rd, String dstIP) {
+    return new SOSPFPacketBuilder()
+            .setRequestId(UUID.randomUUID().toString())
+            .setSrcIP(rd.simulatedIPAddress)
+            .setSrcProcessIP(rd.processIPAddress)
+            .setSrcProcessPort(rd.processPortNumber)
+            .setDstIP(dstIP);
+  }
 
 }
 

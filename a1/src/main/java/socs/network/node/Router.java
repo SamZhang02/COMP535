@@ -3,22 +3,20 @@ package socs.network.node;
 import socs.network.cli.Console;
 import socs.network.message.SOSPFMessageFactory;
 import socs.network.message.SOSPFPacket;
+import socs.network.transport.RouterTransport;
 import socs.network.util.Configuration;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Arrays;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeoutException;
 
 
 public class Router {
   Console console;
+  RouterTransport routerTransport;
   RouterDescription rd = new RouterDescription();
 
   protected LinkStateDatabase lsd;
@@ -27,17 +25,14 @@ public class Router {
   Link[] ports = new Link[NUM_PORTS];
 
 
-  ServerSocket serverSocket;
+  public Router(Configuration config, RouterTransport rt, Console console) {
+    lsd = new LinkStateDatabase(rd);
 
-  public Router(Configuration config, Console console) throws IOException {
     rd.processIPAddress = config.getString("socs.network.router.pip");
     rd.processPortNumber = config.getShort("socs.network.router.port");
     rd.simulatedIPAddress = config.getString("socs.network.router.ip");
 
-
-    lsd = new LinkStateDatabase(rd);
-
-    serverSocket = new ServerSocket(rd.processPortNumber);
+    routerTransport = rt;
     this.console = console;
   }
 
@@ -67,32 +62,18 @@ public class Router {
           short processPort,
           String simulatedIP,
           short weight
-  ) throws ExecutionException, InterruptedException, TimeoutException {
-    CompletableFuture<Boolean> attachResponse = new CompletableFuture<Boolean>();
-    SOSPFPacket connectReqMessage = SOSPFMessageFactory.createHello(rd, simulatedIP);
+  ) {
+    SOSPFPacket connectReqMessage = SOSPFMessageFactory.createHello(rd, simulatedIP, weight);
 
-    new Thread(() -> {
-      try (Socket clientSocket = new Socket(processIP, processPort)) {
-        ObjectOutputStream out = new ObjectOutputStream(clientSocket.getOutputStream());
-        out.flush();
-        ObjectInputStream in = new ObjectInputStream(clientSocket.getInputStream());
+    try {
+      SOSPFPacket res =
+              routerTransport.sendAndWait(processIP, processPort, connectReqMessage);
 
-        out.writeObject(connectReqMessage);
-        out.flush();
+      return res != null && Boolean.TRUE.equals(res.accepted);
 
-        Object reply = in.readObject();
-        if (reply instanceof SOSPFPacket) {
-          SOSPFPacket packet = (SOSPFPacket) reply;
-          attachResponse.complete(Boolean.TRUE.equals(packet.accepted));
-        } else {
-          attachResponse.complete(false);
-        }
-      } catch (IOException | ClassNotFoundException e) {
-        e.printStackTrace();
-      }
-    }).start();
-
-    return attachResponse.get();
+    } catch (IOException | ClassNotFoundException e) {
+      return false;
+    }
   }
 
   /**
@@ -114,17 +95,12 @@ public class Router {
     }
 
     boolean accepted = false;
-    try {
-      accepted = askAttach(
-              processIP,
-              processPort,
-              simulatedIP,
-              weight
-      );
-
-    } catch (ExecutionException | InterruptedException | TimeoutException e) {
-      throw new RuntimeException(e);
-    }
+    accepted = askAttach(
+            processIP,
+            processPort,
+            simulatedIP,
+            weight
+    );
 
     if (!accepted) {
       console.println("Your attach request has been rejected;");
@@ -237,7 +213,7 @@ public class Router {
   public void terminal() throws IOException {
     this.rd.print();
 
-    Thread clientThread = this.startClientServiceThread();
+    Thread clientServiceThread = this.routerTransport.serve(this::requestHandler);
     Thread consoleThread = this.startConsoleThread();
 
     try {
@@ -298,7 +274,7 @@ public class Router {
     } catch (Exception e) {
       e.printStackTrace();
     } finally {
-      serverSocket.close();
+      clientServiceThread.interrupt();
       console.stop();
     }
   }
@@ -312,31 +288,6 @@ public class Router {
     return consoleThread;
   }
 
-
-  private Thread startClientServiceThread() {
-    Thread clientThread = new Thread(
-            () -> {
-              while (!Thread.currentThread().isInterrupted()) {
-                try {
-                  Socket clientSocket = serverSocket.accept(); // blocks
-                  new Thread(() -> {
-                    try {
-                      this.requestHandler(clientSocket);
-                    } catch (IOException e) {
-                      throw new RuntimeException(e);
-                    }
-                  }).start();
-                } catch (IOException e) {
-                  break;
-                }
-              }
-            }, "client-thread"
-    );
-    clientThread.setDaemon(true);
-
-    clientThread.start();
-    return clientThread;
-  }
 
   /**
    * process request from the remote router.

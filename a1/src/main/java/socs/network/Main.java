@@ -2,6 +2,7 @@ package socs.network;
 
 import socs.network.cli.Console;
 import socs.network.node.Router;
+import socs.network.transport.RouterTransport;
 import socs.network.util.Configuration;
 
 import java.io.IOException;
@@ -14,7 +15,12 @@ public class Main {
       System.exit(1);
     }
 
-    Router r = new Router(new Configuration(args[0]), new Console());
+    Configuration config = new Configuration(args[0]);
+    Console console = new Console();
+    RouterTransport routerTransport = new RouterTransport(config);
+
+    Router r = new Router(config, routerTransport, console);
+
     r.terminal();
   }
 }
