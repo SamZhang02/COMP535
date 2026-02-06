@@ -27,7 +27,7 @@ public class Router {
 
   ServerSocket serverSocket;
 
-  public Router(Configuration config) throws IOException {
+  public Router(Configuration config, Console console) throws IOException {
     rd.processIPAddress = config.getString("socs.network.router.pip");
     rd.processPortNumber = config.getShort("socs.network.router.port");
     rd.simulatedIPAddress = config.getString("socs.network.router.ip");
@@ -36,6 +36,7 @@ public class Router {
     lsd = new LinkStateDatabase(rd);
 
     serverSocket = new ServerSocket(rd.processPortNumber);
+    this.console = console;
   }
 
   /**
@@ -251,14 +252,18 @@ public class Router {
           processQuit();
         } else if (command.startsWith("attach ")) {
           String[] cmdLine = command.split(" ");
-          processAttach(cmdLine[1], Short.parseShort(cmdLine[2]),
-                  cmdLine[3], Short.parseShort(cmdLine[4]));
+          processAttach(
+                  cmdLine[1], Short.parseShort(cmdLine[2]),
+                  cmdLine[3], Short.parseShort(cmdLine[4])
+          );
         } else if (command.equals("start")) {
           processStart();
         } else if (command.equals("connect ")) {
           String[] cmdLine = command.split(" ");
-          processConnect(cmdLine[1], Short.parseShort(cmdLine[2]),
-                  cmdLine[3], Short.parseShort(cmdLine[4]));
+          processConnect(
+                  cmdLine[1], Short.parseShort(cmdLine[2]),
+                  cmdLine[3], Short.parseShort(cmdLine[4])
+          );
         } else if (command.equals("neighbors")) {
           //output neighbors
           processNeighbors();
@@ -306,22 +311,24 @@ public class Router {
 
 
   private Thread startClientServiceThread() {
-    Thread clientThread = new Thread(() -> {
-      while (!Thread.currentThread().isInterrupted()) {
-        try {
-          Socket clientSocket = serverSocket.accept(); // blocks
-          new Thread(() -> {
-            try {
-              this.requestHandler(clientSocket);
-            } catch (IOException e) {
-              throw new RuntimeException(e);
-            }
-          }).start();
-        } catch (IOException e) {
-          break;
-        }
-      }
-    }, "client-thread");
+    Thread clientThread = new Thread(
+            () -> {
+              while (!Thread.currentThread().isInterrupted()) {
+                try {
+                  Socket clientSocket = serverSocket.accept(); // blocks
+                  new Thread(() -> {
+                    try {
+                      this.requestHandler(clientSocket);
+                    } catch (IOException e) {
+                      throw new RuntimeException(e);
+                    }
+                  }).start();
+                } catch (IOException e) {
+                  break;
+                }
+              }
+            }, "client-thread"
+    );
     clientThread.setDaemon(true);
 
     clientThread.start();
@@ -369,17 +376,18 @@ public class Router {
     String answer;
     answer = console
             .requestPromptAsync("Do you accept this request? (Y/N)")
-            .join();  // blocks THIS thread, not console thread
+            .join();  // block and wait for response
 
     boolean accepted = answer.equalsIgnoreCase("y");
 
     if (accepted && hasFreePort()) {
       console.println("You accepted the attach request;");
+
       occupyFreePort(
               packet.srcProcessIP,
               packet.srcProcessPort,
               packet.srcIP,
-              0 // TODO: placeholder, have not thought of how to transmit weight yet
+              Integer.parseInt(packet.message) // If its an attach request, the message is just the weight
       );
     } else {
       if (!hasFreePort()) {

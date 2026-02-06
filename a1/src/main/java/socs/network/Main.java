@@ -1,5 +1,6 @@
 package socs.network;
 
+import socs.network.cli.Console;
 import socs.network.node.Router;
 import socs.network.util.Configuration;
 
@@ -13,7 +14,7 @@ public class Main {
       System.exit(1);
     }
 
-    Router r = new Router(new Configuration(args[0]));
+    Router r = new Router(new Configuration(args[0]), new Console());
     r.terminal();
   }
 }

@@ -32,7 +32,19 @@ public class SOSPFPacket implements Serializable {
   //used by Application Message
   public String message; //user inputted message payload
 
-  public SOSPFPacket(String requestId, String srcProcessIP, short srcProcessPort, String srcIP, String dstIP, SOSPFType sospfType, String routerID, Boolean accepted, String neighborID, Vector<LSA> lsaArray, String message) {
+  public SOSPFPacket(
+          String requestId,
+          String srcProcessIP,
+          short srcProcessPort,
+          String srcIP,
+          String dstIP,
+          SOSPFType sospfType,
+          String routerID,
+          Boolean accepted,
+          String neighborID,
+          Vector<LSA> lsaArray,
+          String message
+  ) {
     this.requestId = requestId;
     this.srcProcessIP = srcProcessIP;
     this.srcProcessPort = srcProcessPort;
@@ -47,14 +59,14 @@ public class SOSPFPacket implements Serializable {
   }
 
   public String displayString() {
-      switch (this.sospfType) {
-          case HELLO:
-              return "HELLO";
-          case LINKSTATE_UPDATE:
-              return "LINKSTATE UPDATE";
-          default:
-              return this.message;
-      }
+    switch (this.sospfType) {
+      case HELLO:
+        return "HELLO";
+      case LINKSTATE_UPDATE:
+        return "LINKSTATE UPDATE";
+      default:
+        return this.message;
+    }
   }
 
   @Override
