@@ -3,9 +3,11 @@ package socs.network;
 import socs.network.node.Router;
 import socs.network.util.Configuration;
 
+import java.io.IOException;
+
 public class Main {
 
-  public static void main(String[] args) {
+  public static void main(String[] args) throws IOException {
     if (args.length != 1) {
       System.out.println("usage: program conf_path");
       System.exit(1);

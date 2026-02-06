@@ -1,15 +1,26 @@
 package socs.network.node;
 
+
 public class RouterDescription {
   //used to socket communication
-  String processIPAddress;
-  short processPortNumber;
+  public String processIPAddress;
+  public short processPortNumber;
   //used to identify the router in the simulated network space
-  String simulatedIPAddress;
+  public String simulatedIPAddress;
   //status of the router
-  RouterStatus status;
+  public RouterStatus status;
 
-  public void print(){
+  public RouterDescription() {
+  }
+
+  public RouterDescription(String processIPAddress, short processPortNumber, String simulatedIPAddress) {
+    this.processIPAddress = processIPAddress;
+    this.processPortNumber = processPortNumber;
+    this.simulatedIPAddress = simulatedIPAddress;
+  }
+
+
+  public void print() {
     System.out.println("========================================");
     System.out.printf("Process IP     : %s%n", processIPAddress);
     System.out.printf("Process port   : %d%n", processPortNumber);

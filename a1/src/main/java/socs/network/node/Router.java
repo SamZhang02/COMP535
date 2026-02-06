@@ -1,25 +1,41 @@
 package socs.network.node;
 
+import socs.network.cli.Console;
+import socs.network.message.SOSPFMessageFactory;
+import socs.network.message.SOSPFPacket;
 import socs.network.util.Configuration;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
+import java.io.*;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.Arrays;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 
 
 public class Router {
+  Console console;
+  RouterDescription rd = new RouterDescription();
 
   protected LinkStateDatabase lsd;
 
-  RouterDescription rd = new RouterDescription();
+  int NUM_PORTS = 4;
+  Link[] ports = new Link[NUM_PORTS];
 
-  //assuming that all routers are with 4 ports
-  Link[] ports = new Link[4];
 
-  public Router(Configuration config) {
+  ServerSocket serverSocket;
+
+  public Router(Configuration config) throws IOException {
     rd.processIPAddress = config.getString("socs.network.router.pip");
     rd.processPortNumber = config.getShort("socs.network.router.port");
     rd.simulatedIPAddress = config.getString("socs.network.router.ip");
+
+
     lsd = new LinkStateDatabase(rd);
+
+    serverSocket = new ServerSocket(rd.processPortNumber);
   }
 
   /**
@@ -43,6 +59,39 @@ public class Router {
 
   }
 
+  private boolean askAttach(
+          String processIP,
+          short processPort,
+          String simulatedIP,
+          short weight
+  ) throws ExecutionException, InterruptedException, TimeoutException {
+    CompletableFuture<Boolean> attachResponse = new CompletableFuture<Boolean>();
+    SOSPFPacket connectReqMessage = SOSPFMessageFactory.createHello(rd, simulatedIP);
+
+    new Thread(() -> {
+      try (Socket clientSocket = new Socket(processIP, processPort)) {
+        ObjectOutputStream out = new ObjectOutputStream(clientSocket.getOutputStream());
+        out.flush();
+        ObjectInputStream in = new ObjectInputStream(clientSocket.getInputStream());
+
+        out.writeObject(connectReqMessage);
+        out.flush();
+
+        Object reply = in.readObject();
+        if (reply instanceof SOSPFPacket) {
+          SOSPFPacket packet = (SOSPFPacket) reply;
+          attachResponse.complete(Boolean.TRUE.equals(packet.accepted));
+        } else {
+          attachResponse.complete(false);
+        }
+      } catch (IOException | ClassNotFoundException e) {
+        e.printStackTrace();
+      }
+    }).start();
+
+    return attachResponse.get();
+  }
+
   /**
    * attach the link to the remote router, which is identified by the given simulated ip;
    * to establish the connection via socket, you need to indentify the process IP and process Port;
@@ -50,20 +99,39 @@ public class Router {
    * <p/>
    * NOTE: this command should not trigger link database synchronization
    */
-  private void processAttach(String processIP, short processPort,
-                             String simulatedIP, short weight) {
+  private void processAttach(
+          String processIP,
+          short processPort,
+          String simulatedIP,
+          short weight
+  ) {
+    if (!hasFreePort()) {
+      console.println("Can't attach any more ports;");
+      return;
+    }
 
+    boolean accepted = false;
+    try {
+      accepted = askAttach(
+              processIP,
+              processPort,
+              simulatedIP,
+              weight
+      );
+
+    } catch (ExecutionException | InterruptedException | TimeoutException e) {
+      throw new RuntimeException(e);
+    }
+
+    if (!accepted) {
+      console.println("Your attach request has been rejected;");
+      return;
+    }
+
+    console.println("Your attach request has been accepted;");
+    occupyFreePort(processIP, processPort, simulatedIP, weight);
   }
 
-
-  /**
-   * process request from the remote router. 
-   * For example: when router2 tries to attach router1. Router1 can decide whether it will accept this request. 
-   * The intuition is that if router2 is an unknown/anomaly router, it is always safe to reject the attached request from router2.
-   */
-  private void requestHandler() {
-
-  }
 
   /**
    * broadcast Hello to neighbors
@@ -79,8 +147,10 @@ public class Router {
    * <p/>
    * This command does trigger the link database synchronization
    */
-  private void processConnect(String processIP, short processPort,
-                              String simulatedIP, short weight) {
+  private void processConnect(
+          String processIP, short processPort,
+          String simulatedIP, short weight
+  ) {
 
   }
 
@@ -101,18 +171,20 @@ public class Router {
   /**
    * update the weight of an attached link
    */
-  private void updateWeight(String processIP, short processPort,
-                             String simulatedIP, short weight){
+  private void updateWeight(
+          String processIP, short processPort,
+          String simulatedIP, short weight
+  ) {
 
   }
 
   /**
    * update the weight of a specific port.
-   * This change should trigger synchronization of the Link State Database by sending 
+   * This change should trigger synchronization of the Link State Database by sending
    * a Link State Advertisement (LSA) update to all neighboring routers in the topology.
    *
    * @param portNumber the port number (0-3) to update
-   * @param newWeight the new weight/cost for the link attached to this port
+   * @param newWeight  the new weight/cost for the link attached to this port
    */
   private void processUpdate(short portNumber, short newWeight) {
 
@@ -125,7 +197,7 @@ public class Router {
    * When you run send, the window of the router where you run the command should print:
    * "Sending message to <Destination IP>"
    * <p/>
-   * For each intermediate router on the shortest path (excluding the source and destination), 
+   * For each intermediate router on the shortest path (excluding the source and destination),
    * the router window should print:
    * "Forwarding packet from <Source IP> to <Destination IP>"
    * <p/>
@@ -134,7 +206,7 @@ public class Router {
    * "<Message>"
    *
    * @param destinationIP the simulated IP address of the destination router
-   * @param message the message content to send
+   * @param message       the message content to send
    */
   private void processSend(String destinationIP, String message) {
 
@@ -155,19 +227,20 @@ public class Router {
    *
    * @param packet the received application message packet
    */
-  private void handleApplicationMessage(socs.network.message.SOSPFPacket packet) {
+  private void handleApplicationMessage(SOSPFPacket packet) {
 
   }
 
-  public void terminal() {
+  public void terminal() throws IOException {
     this.rd.print();
 
+    Thread clientThread = this.startClientServiceThread();
+    Thread consoleThread = this.startConsoleThread();
+
     try {
-      InputStreamReader isReader = new InputStreamReader(System.in);
-      BufferedReader br = new BufferedReader(isReader);
-      System.out.print(">> ");
-      String command = br.readLine();
       while (true) {
+        console.print(">> ");
+        String command = console.getCommandQueue().take();
         if (command.startsWith("detect ")) {
           String[] cmdLine = command.split(" ");
           processDetect(cmdLine[1]);
@@ -195,7 +268,7 @@ public class Router {
           if (cmdLine.length >= 3) {
             processSend(cmdLine[1], cmdLine[2]);
           } else {
-            System.out.println("Usage: send [Destination IP] [Message]");
+            console.println("Usage: send [Destination IP] [Message]");
           }
         } else if (command.startsWith("update ")) {
           //update [port_number] [new_weight]
@@ -203,21 +276,148 @@ public class Router {
           if (cmdLine.length >= 3) {
             processUpdate(Short.parseShort(cmdLine[1]), Short.parseShort(cmdLine[2]));
           } else {
-            System.out.println("Usage: update [port_number] [new_weight]");
+            console.println("Usage: update [port_number] [new_weight]");
           }
+        } else if (command.startsWith("port")) {
+          console.println(Arrays.toString(ports));
+          ;
         } else {
           //invalid command
           break;
         }
-        System.out.print(">> ");
-        command = br.readLine();
       }
-      isReader.close();
-      br.close();
+
     } catch (Exception e) {
       e.printStackTrace();
+    } finally {
+      serverSocket.close();
+      console.stop();
     }
   }
 
+  private Thread startConsoleThread() {
+    console = new Console();
+    Thread consoleThread = new Thread(console, "console-thread");
+    consoleThread.setDaemon(true);
 
+    consoleThread.start();
+    return consoleThread;
+  }
+
+
+  private Thread startClientServiceThread() {
+    Thread clientThread = new Thread(() -> {
+      while (!Thread.currentThread().isInterrupted()) {
+        try {
+          Socket clientSocket = serverSocket.accept(); // blocks
+          new Thread(() -> {
+            try {
+              this.requestHandler(clientSocket);
+            } catch (IOException e) {
+              throw new RuntimeException(e);
+            }
+          }).start();
+        } catch (IOException e) {
+          break;
+        }
+      }
+    }, "client-thread");
+    clientThread.setDaemon(true);
+
+    clientThread.start();
+    return clientThread;
+  }
+
+  /**
+   * process request from the remote router.
+   * For example: when router2 tries to attach router1. Router1 can decide whether it will accept this request.
+   * The intuition is that if router2 is an unknown/anomaly router, it is always safe to reject the attached request from router2.
+   */
+  private void requestHandler(Socket socket) throws IOException {
+    try {
+      ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+      out.flush();
+      ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
+
+      SOSPFPacket packet = readIncomingPacket(in);
+
+      boolean isAttachRequest = packet.sospfType == SOSPFPacket.SOSPFType.HELLO && Arrays.stream(ports).noneMatch(
+              p -> p != null &&
+                      p.router2 != null &&
+                      p.router2.simulatedIPAddress.equals(packet.srcIP)
+      );
+
+      // This is under assumption that if a router is currently busy answering a y/n question, auto reject other attach requests
+      if (isAttachRequest && console.hasPrompt()) {
+        out.writeObject(SOSPFMessageFactory.createAttachResponse(this.rd, packet.srcIP, false));
+        return;
+      } else if (isAttachRequest) {
+        out.writeObject(handleAttachRequest(packet));
+      }
+
+      console.print(">> ");
+    } catch (IOException | ClassNotFoundException e) {
+      e.printStackTrace();
+    } finally {
+      socket.close();
+    }
+  }
+
+  private SOSPFPacket handleAttachRequest(SOSPFPacket packet) {
+    console.println("\nReceived " + packet.displayString() + " from " + packet.srcIP);
+
+    String answer;
+    answer = console
+            .requestPromptAsync("Do you accept this request? (Y/N)")
+            .join();  // blocks THIS thread, not console thread
+
+    boolean accepted = answer.equalsIgnoreCase("y");
+
+    if (accepted && hasFreePort()) {
+      console.println("You accepted the attach request;");
+      occupyFreePort(
+              packet.srcProcessIP,
+              packet.srcProcessPort,
+              packet.srcIP,
+              0 // TODO: placeholder, have not thought of how to transmit weight yet
+      );
+    } else {
+      if (!hasFreePort()) {
+        console.println("No free ports, will reject the attach request;");
+      }
+      console.println("You rejected the attach request");
+    }
+
+    return SOSPFMessageFactory.createAttachResponse(rd, packet.srcIP, accepted);
+  }
+
+  private boolean hasFreePort() {
+    return Arrays.stream(this.ports).anyMatch(Objects::isNull);
+  }
+
+  private void occupyFreePort(
+          String processIP,
+          short processPort,
+          String simulatedIP,
+          int weight
+  ) {
+    int freePortIdx = -1;
+    for (int i = 0; i < NUM_PORTS; i++)
+      if (this.ports[i] == null) {
+        freePortIdx = i;
+        break;
+      }
+
+    Link link = new Link(this.rd, new RouterDescription(processIP, processPort, simulatedIP), weight);
+    ports[freePortIdx] = link;
+  }
+
+  private SOSPFPacket readIncomingPacket(ObjectInputStream in) throws IOException, ClassNotFoundException {
+    Object data = in.readObject();
+    if (!(data instanceof SOSPFPacket)) {
+      throw new IOException("Invalid object received. Expected SOSPFPacket but got " + data.getClass().getName());
+    }
+
+    return (SOSPFPacket) data;
+  }
 }
