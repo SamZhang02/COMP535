@@ -5,7 +5,9 @@ import socs.network.message.SOSPFMessageFactory;
 import socs.network.message.SOSPFPacket;
 import socs.network.util.Configuration;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Arrays;
@@ -284,6 +286,7 @@ public class Router {
             console.println("Usage: update [port_number] [new_weight]");
           }
         } else if (command.startsWith("port")) {
+          // For debugging
           console.println(Arrays.toString(ports));
           ;
         } else {
