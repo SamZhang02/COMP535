@@ -12,7 +12,6 @@ import socs.network.util.Configuration;
 
 import java.io.IOException;
 import java.net.Socket;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
@@ -372,7 +371,7 @@ public class Router {
         return;
       }
 
-      console.log("set " + otherRouterIP + " STATE to " + link.otherRouter.status.toString() + ";");
+      console.log("set " + otherRouterIP + " STATE to " + link.otherRouter.status + ";");
       if (shouldReplyHello) {
         try {
           ch.send(SOSPFMessageFactory.createHello(this.rd, otherRouterIP));
@@ -394,7 +393,6 @@ public class Router {
       processQuit();
     } else if (command.startsWith("attach")) {
       String[] cmdLine = command.split(" ");
-      console.log(Arrays.toString(cmdLine));
       if (cmdLine.length < 5) {
         console.log("Usage: attach [process IP] [process port] [simulated IP] [weight]");
       } else {
