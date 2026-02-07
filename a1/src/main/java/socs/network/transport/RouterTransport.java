@@ -9,6 +9,7 @@ import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 
+// Communication between routers should use RouterTransport
 public class RouterTransport {
   private final ServerSocket serverSocket;
 

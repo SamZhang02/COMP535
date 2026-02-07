@@ -36,6 +36,27 @@ public class Router {
     this.console = console;
   }
 
+  public void terminal() {
+    this.rd.print();
+
+    Thread clientServiceThread = this.routerTransport.serve(this::requestHandler);
+    Thread consoleThread = this.startConsoleThread();
+
+    try {
+      while (true) {
+        console.print(">> ");
+        String command = console.getCommandQueue().take();
+        if (!handleCommand(command)) break;
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+    } finally {
+      clientServiceThread.interrupt();
+      console.stop();
+    }
+  }
+
+
   /**
    * output the shortest path to the given destination ip
    * <p/>
@@ -210,74 +231,6 @@ public class Router {
 
   }
 
-  public void terminal() throws IOException {
-    this.rd.print();
-
-    Thread clientServiceThread = this.routerTransport.serve(this::requestHandler);
-    Thread consoleThread = this.startConsoleThread();
-
-    try {
-      while (true) {
-        console.print(">> ");
-        String command = console.getCommandQueue().take();
-        if (command.startsWith("detect ")) {
-          String[] cmdLine = command.split(" ");
-          processDetect(cmdLine[1]);
-        } else if (command.startsWith("disconnect ")) {
-          String[] cmdLine = command.split(" ");
-          processDisconnect(Short.parseShort(cmdLine[1]));
-        } else if (command.startsWith("quit")) {
-          processQuit();
-        } else if (command.startsWith("attach ")) {
-          String[] cmdLine = command.split(" ");
-          processAttach(
-                  cmdLine[1], Short.parseShort(cmdLine[2]),
-                  cmdLine[3], Short.parseShort(cmdLine[4])
-          );
-        } else if (command.equals("start")) {
-          processStart();
-        } else if (command.equals("connect ")) {
-          String[] cmdLine = command.split(" ");
-          processConnect(
-                  cmdLine[1], Short.parseShort(cmdLine[2]),
-                  cmdLine[3], Short.parseShort(cmdLine[4])
-          );
-        } else if (command.equals("neighbors")) {
-          //output neighbors
-          processNeighbors();
-        } else if (command.startsWith("send ")) {
-          //send [Destination IP] [Message]
-          String[] cmdLine = command.split(" ", 3);
-          if (cmdLine.length >= 3) {
-            processSend(cmdLine[1], cmdLine[2]);
-          } else {
-            console.println("Usage: send [Destination IP] [Message]");
-          }
-        } else if (command.startsWith("update ")) {
-          //update [port_number] [new_weight]
-          String[] cmdLine = command.split(" ");
-          if (cmdLine.length >= 3) {
-            processUpdate(Short.parseShort(cmdLine[1]), Short.parseShort(cmdLine[2]));
-          } else {
-            console.println("Usage: update [port_number] [new_weight]");
-          }
-        } else if (command.startsWith("port")) {
-          // For debugging
-          console.println(Arrays.toString(ports));
-          ;
-        } else {
-          //invalid command
-          break;
-        }
-      }
-
-    } catch (Exception e) {
-      e.printStackTrace();
-    } finally {
-      clientServiceThread.interrupt();
-      console.stop();
-    }
-  }
 
   private Thread startConsoleThread() {
     console = new Console();
@@ -381,5 +334,58 @@ public class Router {
     }
 
     return (SOSPFPacket) data;
+  }
+
+  private boolean handleCommand(String command) {
+    if (command.startsWith("detect ")) {
+      String[] cmdLine = command.split(" ");
+      processDetect(cmdLine[1]);
+    } else if (command.startsWith("disconnect ")) {
+      String[] cmdLine = command.split(" ");
+      processDisconnect(Short.parseShort(cmdLine[1]));
+    } else if (command.startsWith("quit")) {
+      processQuit();
+    } else if (command.startsWith("attach ")) {
+      String[] cmdLine = command.split(" ");
+      processAttach(
+              cmdLine[1], Short.parseShort(cmdLine[2]),
+              cmdLine[3], Short.parseShort(cmdLine[4])
+      );
+    } else if (command.equals("start")) {
+      processStart();
+    } else if (command.equals("connect ")) {
+      String[] cmdLine = command.split(" ");
+      processConnect(
+              cmdLine[1], Short.parseShort(cmdLine[2]),
+              cmdLine[3], Short.parseShort(cmdLine[4])
+      );
+    } else if (command.equals("neighbors")) {
+      //output neighbors
+      processNeighbors();
+    } else if (command.startsWith("send ")) {
+      //send [Destination IP] [Message]
+      String[] cmdLine = command.split(" ", 3);
+      if (cmdLine.length >= 3) {
+        processSend(cmdLine[1], cmdLine[2]);
+      } else {
+        console.println("Usage: send [Destination IP] [Message]");
+      }
+    } else if (command.startsWith("update ")) {
+      //update [port_number] [new_weight]
+      String[] cmdLine = command.split(" ");
+      if (cmdLine.length >= 3) {
+        processUpdate(Short.parseShort(cmdLine[1]), Short.parseShort(cmdLine[2]));
+      } else {
+        console.println("Usage: update [port_number] [new_weight]");
+      }
+    } else if (command.startsWith("port")) {
+      // For debugging
+      console.println(Arrays.toString(ports));
+      ;
+    } else {
+      //invalid command
+      return false;
+    }
+    return true;
   }
 }
