@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
+import java.util.List;
 
 public class Router {
   RouterDescription rd = new RouterDescription();
@@ -155,7 +156,10 @@ public class Router {
    * output the neighbors of the routers
    */
   private void processNeighbors() {
-
+    List<Link> neighbors = portsTable.getTwoWays();
+    for (Link link : neighbors) {
+      console.println(link.otherRouter.simulatedIPAddress);
+    }
   }
 
   /**

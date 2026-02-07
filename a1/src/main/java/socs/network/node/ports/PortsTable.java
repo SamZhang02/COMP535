@@ -1,8 +1,11 @@
 package socs.network.node.ports;
 
 import socs.network.node.Link;
+import socs.network.node.RouterStatus;
 
 import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
 
 public class PortsTable {
   private final int capacity;
@@ -72,6 +75,14 @@ public class PortsTable {
       }
     }
     return false;
+  }
+
+  public List<Link> getAllLinks() {
+    return Arrays.stream(this.ports).filter(Objects::nonNull).toList();
+  }
+
+  public List<Link> getTwoWays() {
+    return getAllLinks().stream().filter(p -> p.otherRouter.status == RouterStatus.TWO_WAY).toList();
   }
 
   @Override
