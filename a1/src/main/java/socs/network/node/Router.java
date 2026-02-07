@@ -3,6 +3,7 @@ package socs.network.node;
 import socs.network.cli.Console;
 import socs.network.message.SOSPFMessageFactory;
 import socs.network.message.SOSPFPacket;
+import socs.network.node.ports.PortsTable;
 import socs.network.transport.RouterTransport;
 import socs.network.util.Configuration;
 
@@ -10,22 +11,18 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
-import java.util.Arrays;
-import java.util.Objects;
-
 
 public class Router {
-  Console console;
-  RouterTransport routerTransport;
   RouterDescription rd = new RouterDescription();
-
   protected LinkStateDatabase lsd;
 
-  int NUM_PORTS = 4;
-  Link[] ports = new Link[NUM_PORTS];
+  Console console;
+  RouterTransport routerTransport;
+
+  private final PortsTable portsTable;
 
 
-  public Router(Configuration config, RouterTransport rt, Console console) {
+  public Router(Configuration config, RouterTransport rt, Console console, PortsTable portsTable) {
     lsd = new LinkStateDatabase(rd);
 
     rd.processIPAddress = config.getString("socs.network.router.pip");
@@ -34,6 +31,7 @@ public class Router {
 
     routerTransport = rt;
     this.console = console;
+    this.portsTable = portsTable;
   }
 
   public void terminal() {
@@ -110,7 +108,7 @@ public class Router {
           String simulatedIP,
           short weight
   ) {
-    if (!hasFreePort()) {
+    if (!portsTable.hasFreePort()) {
       console.println("Can't attach any more ports;");
       return;
     }
@@ -255,11 +253,8 @@ public class Router {
 
       SOSPFPacket packet = readIncomingPacket(in);
 
-      boolean isAttachRequest = packet.sospfType == SOSPFPacket.SOSPFType.HELLO && Arrays.stream(ports).noneMatch(
-              p -> p != null &&
-                      p.router2 != null &&
-                      p.router2.simulatedIPAddress.equals(packet.srcIP)
-      );
+      boolean isAttachRequest =
+              packet.sospfType == SOSPFPacket.SOSPFType.HELLO && !portsTable.containsIP(packet.srcIP);
 
       // This is under assumption that if a router is currently busy answering a y/n question, auto reject other attach requests
       if (isAttachRequest && console.hasPrompt()) {
@@ -287,7 +282,7 @@ public class Router {
 
     boolean accepted = answer.equalsIgnoreCase("y");
 
-    if (accepted && hasFreePort()) {
+    if (accepted && portsTable.hasFreePort()) {
       console.println("You accepted the attach request;");
 
       occupyFreePort(
@@ -297,7 +292,7 @@ public class Router {
               Integer.parseInt(packet.message) // If its an attach request, the message is just the weight
       );
     } else {
-      if (!hasFreePort()) {
+      if (!portsTable.hasFreePort()) {
         console.println("No free ports, will reject the attach request;");
       }
       console.println("You rejected the attach request");
@@ -306,25 +301,14 @@ public class Router {
     return SOSPFMessageFactory.createAttachResponse(rd, packet.srcIP, accepted);
   }
 
-  private boolean hasFreePort() {
-    return Arrays.stream(this.ports).anyMatch(Objects::isNull);
-  }
-
   private void occupyFreePort(
           String processIP,
           short processPort,
           String simulatedIP,
           int weight
   ) {
-    int freePortIdx = -1;
-    for (int i = 0; i < NUM_PORTS; i++)
-      if (this.ports[i] == null) {
-        freePortIdx = i;
-        break;
-      }
-
     Link link = new Link(this.rd, new RouterDescription(processIP, processPort, simulatedIP), weight);
-    ports[freePortIdx] = link;
+    this.portsTable.addLink(link);
   }
 
   private SOSPFPacket readIncomingPacket(ObjectInputStream in) throws IOException, ClassNotFoundException {
@@ -380,7 +364,7 @@ public class Router {
       }
     } else if (command.startsWith("port")) {
       // For debugging
-      console.println(Arrays.toString(ports));
+      console.println(this.portsTable.toString());
       ;
     } else {
       //invalid command

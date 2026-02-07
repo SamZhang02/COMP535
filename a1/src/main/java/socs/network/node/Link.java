@@ -2,9 +2,9 @@ package socs.network.node;
 
 public class Link {
 
-  RouterDescription router1;
-  RouterDescription router2;
-  int weight;
+  public RouterDescription router1;
+  public RouterDescription router2;
+  public int weight;
 
   public Link(RouterDescription r1, RouterDescription r2, int weight) {
     this.router1 = r1;
