@@ -31,6 +31,7 @@ public class Console implements Runnable {
     consoleThread = new Thread(this, "console-thread");
     consoleThread.setDaemon(true);
     consoleThread.start();
+
     return consoleThread;
   }
 
@@ -38,27 +39,28 @@ public class Console implements Runnable {
     return commandQueue;
   }
 
-  // Prioritize using Console.log instead of the usual SOUT;
-  // Console.log clears the console beforehand so the CLI's UI remains not-messy.
+  /**
+   * Prioritize using Console.log instead of the usual SOUT;
+   * Console.log clears the console beforehand so the CLI's UI remains not-messy.
+   */
   public synchronized void log(String msg) {
     this.log(msg, true);
   }
 
   public synchronized void log(String msg, boolean redraw) {
-    // Move to new line safely
-    System.out.print("\r");      // go to line start
-    System.out.print("\033[K");  // clear line (ANSI escape)
+    System.out.print("\r");
+    System.out.print("\033[K");
 
-    System.out.println(msg);     // print log
+    System.out.println(msg);
 
     if (!redraw) {
       return;
     }
 
     if (pendingPrompt == null) {
-      System.out.print(">> ");   // redraw prompt
+      System.out.print(">> ");
     } else {
-      System.out.print("$ ");    // redraw Y/N prompt
+      System.out.print("$ ");
     }
   }
 
