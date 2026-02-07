@@ -4,12 +4,11 @@ import socs.network.cli.Console;
 import socs.network.message.SOSPFMessageFactory;
 import socs.network.message.SOSPFPacket;
 import socs.network.node.ports.PortsTable;
+import socs.network.transport.LinkChannel;
 import socs.network.transport.RouterTransport;
 import socs.network.util.Configuration;
 
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.util.List;
 
@@ -77,6 +76,7 @@ public class Router {
   }
 
   private boolean askAttach(
+          LinkChannel linkChannel,
           String processIP,
           short processPort,
           String simulatedIP,
@@ -85,8 +85,8 @@ public class Router {
     SOSPFPacket connectReqMessage = SOSPFMessageFactory.createHello(rd, simulatedIP, String.valueOf(weight));
 
     try {
-      SOSPFPacket res =
-              routerTransport.sendAndWait(processIP, processPort, connectReqMessage);
+      linkChannel.send(connectReqMessage);
+      SOSPFPacket res = linkChannel.receive();
 
       return res != null && Boolean.TRUE.equals(res.accepted);
 
@@ -113,8 +113,18 @@ public class Router {
       return;
     }
 
-    boolean accepted = false;
+    LinkChannel linkChannel;
+    boolean accepted;
+    try {
+      linkChannel = new LinkChannel(new Socket(processIP, processPort));
+    } catch (IOException e) {
+      console.println("Could not create socket to send attach request");
+      e.printStackTrace();
+      return;
+    }
+
     accepted = askAttach(
+            linkChannel,
             processIP,
             processPort,
             simulatedIP,
@@ -123,11 +133,15 @@ public class Router {
 
     if (!accepted) {
       console.println("Your attach request has been rejected;");
+      linkChannel.close();
       return;
     }
 
     console.println("Your attach request has been accepted;");
-    occupyFreePort(processIP, processPort, simulatedIP, weight);
+
+    Link link = new Link(this.rd, new RouterDescription(processIP, processPort, simulatedIP), weight, linkChannel);
+    this.portsTable.addLink(link);
+    link.listen(this::handleLinkPacket);
   }
 
 
@@ -141,10 +155,6 @@ public class Router {
     // we should expect a HELLO back
     // once we get a HELLO back, set our status as TWO WAYS
     // send another HELLO to let the other router know its 2 ways
-
-    portsTable.getAllLinks().stream().parallel().map(
-            // TODO: function that does the 3 way flow
-    );
   }
 
   /**
@@ -251,40 +261,39 @@ public class Router {
     return consoleThread;
   }
 
-
   /**
    * process request from the remote router.
    * For example: when router2 tries to attach router1. Router1 can decide whether it will accept this request.
    * The intuition is that if router2 is an unknown/anomaly router, it is always safe to reject the attached request from router2.
    */
-  private void requestHandler(Socket socket) throws IOException {
+  private void requestHandler(Socket socket) {
     try {
-      ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-      out.flush();
-      ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
-
-      SOSPFPacket packet = readIncomingPacket(in);
+      LinkChannel ch = new LinkChannel(socket);
+      SOSPFPacket packet = ch.receive();
 
       boolean isAttachRequest =
               packet.sospfType == SOSPFPacket.SOSPFType.HELLO && !portsTable.containsIP(packet.srcIP);
 
       // This is under assumption that if a router is currently busy answering a y/n question, auto reject other attach requests
       if (isAttachRequest && console.hasPrompt()) {
-        out.writeObject(SOSPFMessageFactory.createAttachResponse(this.rd, packet.srcIP, false));
+        ch.send(SOSPFMessageFactory.createAttachResponse(this.rd, packet.srcIP, false));
+        ch.close();
         return;
       } else if (isAttachRequest) {
-        out.writeObject(handleAttachRequest(packet));
+        SOSPFPacket res = handleAttachRequest(packet, ch);
+        ch.send(res);
+        if (!res.accepted) {
+          ch.close();
+        }
       }
 
       console.print(">> ");
     } catch (IOException | ClassNotFoundException e) {
       e.printStackTrace();
-    } finally {
-      socket.close();
     }
   }
 
-  private SOSPFPacket handleAttachRequest(SOSPFPacket packet) {
+  private SOSPFPacket handleAttachRequest(SOSPFPacket packet, LinkChannel linkChannel) {
     console.println("\nReceived " + packet.displayString() + " from " + packet.srcIP);
 
     String answer;
@@ -292,17 +301,20 @@ public class Router {
             .requestPromptAsync("Do you accept this request? (Y/N)")
             .join();  // block and wait for response
 
-    boolean accepted = answer.equalsIgnoreCase("y");
+    boolean accepted = answer.equalsIgnoreCase("y") && portsTable.hasFreePort();
 
-    if (accepted && portsTable.hasFreePort()) {
+    if (accepted) {
       console.println("You accepted the attach request;");
 
-      occupyFreePort(
-              packet.srcProcessIP,
-              packet.srcProcessPort,
-              packet.srcIP,
-              Integer.parseInt(packet.message) // If its an attach request, the message is just the weight
+      Link link = new Link(
+              this.rd,
+              new RouterDescription(packet.srcProcessIP, packet.srcProcessPort, packet.srcIP),
+              Integer.parseInt(packet.message),
+              linkChannel
       );
+      this.portsTable.addLink(link);
+      link.listen(this::handleLinkPacket);
+
     } else {
       if (!portsTable.hasFreePort()) {
         console.println("No free ports, will reject the attach request;");
@@ -313,23 +325,18 @@ public class Router {
     return SOSPFMessageFactory.createAttachResponse(rd, packet.srcIP, accepted);
   }
 
-  private void occupyFreePort(
-          String processIP,
-          short processPort,
-          String simulatedIP,
-          int weight
-  ) {
-    Link link = new Link(this.rd, new RouterDescription(processIP, processPort, simulatedIP), weight);
-    this.portsTable.addLink(link);
-  }
-
-  private SOSPFPacket readIncomingPacket(ObjectInputStream in) throws IOException, ClassNotFoundException {
-    Object data = in.readObject();
-    if (!(data instanceof SOSPFPacket)) {
-      throw new IOException("Invalid object received. Expected SOSPFPacket but got " + data.getClass().getName());
+  private void handleLinkPacket(SOSPFPacket packet) {
+    if (packet == null) {
+      return;
     }
 
-    return (SOSPFPacket) data;
+    if (packet.sospfType == SOSPFPacket.SOSPFType.HELLO && packet.accepted != null) {
+      if (Boolean.TRUE.equals(packet.accepted)) {
+        console.println("Attach accepted by " + packet.srcIP + ";");
+      } else {
+        console.println("Attach rejected by " + packet.srcIP + ";");
+      }
+    }
   }
 
   private boolean handleCommand(String command) {
