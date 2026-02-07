@@ -2,8 +2,8 @@ package socs.network.node;
 
 public class Link {
 
-  public RouterDescription router1;
-  public RouterDescription router2;
+  public RouterDescription router1; // This should be OUR router
+  public RouterDescription router2; // This is the OTHER router
   public int weight;
 
   public Link(RouterDescription r1, RouterDescription r2, int weight) {

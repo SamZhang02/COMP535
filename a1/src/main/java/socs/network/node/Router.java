@@ -16,9 +16,8 @@ public class Router {
   RouterDescription rd = new RouterDescription();
   protected LinkStateDatabase lsd;
 
-  Console console;
-  RouterTransport routerTransport;
-
+  private Console console;
+  private final RouterTransport routerTransport;
   private final PortsTable portsTable;
 
 
