@@ -36,7 +36,10 @@ public class Router {
     routerTransport = rt;
     this.console = console;
     this.portsTable = portsTable;
-    this.errorHandler = Exception::printStackTrace;
+    this.errorHandler = (e) -> {
+      e.printStackTrace();
+      console.log("");
+    };
   }
 
   public void terminal() {
@@ -157,6 +160,7 @@ public class Router {
     portsTable.getAllLinks().forEach(link -> {
       LinkChannel ch = link.channel;
       try {
+        link.helloInitiatedByMe = true;
         link.otherRouter.status = RouterStatus.INIT;
         ch.send(SOSPFMessageFactory.createHello(this.rd, link.otherRouter.simulatedIPAddress));
       } catch (IOException e) {
@@ -354,27 +358,37 @@ public class Router {
     boolean isDBSyncHELLO = packet.sospfType == SOSPFPacket.SOSPFType.HELLO;
     if (isDBSyncHELLO) {
       String otherRouterIP = packet.srcIP;
-      Optional<Link> link = portsTable.get(otherRouterIP);
+      Optional<Link> linkOpt = portsTable.get(otherRouterIP);
 
-      if (link.isEmpty()) {
+      if (linkOpt.isEmpty()) {
         // Not a neighbour, should not really end up in this state, for now just ignore the packet
         return;
       }
 
-      RouterStatus status = link.get().otherRouter.status;
+      Link link = linkOpt.get();
+      RouterStatus status = link.otherRouter.status;
+      boolean shouldReplyHello = false;
+
       if (status == null) {
-        link.get().otherRouter.status = RouterStatus.INIT;
+        link.otherRouter.status = RouterStatus.INIT;
+        shouldReplyHello = true;
       } else if (status == RouterStatus.INIT) {
-        link.get().otherRouter.status = RouterStatus.TWO_WAY;
+        link.otherRouter.status = RouterStatus.TWO_WAY;
+        if (link.helloInitiatedByMe) {
+          shouldReplyHello = true;
+          link.helloInitiatedByMe = false;
+        }
       } else if (status == RouterStatus.TWO_WAY) {
         return;
       }
 
-      console.log("set " + otherRouterIP + " STATE to " + link.get().otherRouter.status.toString() + ";");
-      try {
-        ch.send(SOSPFMessageFactory.createHello(this.rd, otherRouterIP));
-      } catch (IOException e) {
-        throw new RuntimeException(e);
+      console.log("set " + otherRouterIP + " STATE to " + link.otherRouter.status.toString() + ";");
+      if (shouldReplyHello) {
+        try {
+          ch.send(SOSPFMessageFactory.createHello(this.rd, otherRouterIP));
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
       }
     }
   }
