@@ -27,6 +27,16 @@ public class RouterDescription {
     System.out.printf("Simulated IP   : %s%n", simulatedIPAddress);
     System.out.println("========================================");
   }
+
+  @Override
+  public String toString() {
+    return "RouterDescription{" +
+            "processIPAddress='" + processIPAddress + '\'' +
+            ", processPortNumber=" + processPortNumber +
+            ", simulatedIPAddress='" + simulatedIPAddress + '\'' +
+            ", status=" + status +
+            '}';
+  }
 }
 
 

@@ -6,6 +6,7 @@ import socs.network.node.RouterStatus;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 public class PortsTable {
   private final int capacity;
@@ -52,6 +53,11 @@ public class PortsTable {
   public Link get(int port) {
     return this.ports[port];
   }
+
+  public Optional<Link> get(String ip) {
+    return getAllLinks().stream().filter(l -> Objects.equals(l.otherRouter.simulatedIPAddress, ip)).findFirst();
+  }
+
 
   public void removeLink(Link link) {
     for (int i = 0; i < this.capacity; i++) {

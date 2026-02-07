@@ -1,8 +1,8 @@
-package socs.network.node;
+package socs.network.transport;
 
 import socs.network.message.SOSPFPacket;
 
 @FunctionalInterface
 public interface PacketHandler {
-  void handle(SOSPFPacket packet);
+  void handle(SOSPFPacket packet, LinkChannel ch);
 }

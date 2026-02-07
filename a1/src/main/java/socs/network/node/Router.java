@@ -5,12 +5,14 @@ import socs.network.message.SOSPFMessageFactory;
 import socs.network.message.SOSPFPacket;
 import socs.network.node.ports.PortsTable;
 import socs.network.transport.LinkChannel;
+import socs.network.transport.PacketHandler;
 import socs.network.transport.RouterTransport;
 import socs.network.util.Configuration;
 
 import java.io.IOException;
 import java.net.Socket;
 import java.util.List;
+import java.util.Optional;
 
 public class Router {
   RouterDescription rd = new RouterDescription();
@@ -41,7 +43,6 @@ public class Router {
 
     try {
       while (true) {
-        console.print(">> ");
         String command = console.getCommandQueue().take();
         if (!handleCommand(command)) break;
       }
@@ -109,7 +110,7 @@ public class Router {
           short weight
   ) {
     if (!portsTable.hasFreePort()) {
-      console.println("Can't attach any more ports;");
+      console.log("Can't attach any more ports;");
       return;
     }
 
@@ -118,7 +119,7 @@ public class Router {
     try {
       linkChannel = new LinkChannel(new Socket(processIP, processPort));
     } catch (IOException e) {
-      console.println("Could not create socket to send attach request");
+      console.log("Could not create socket to send attach request");
       e.printStackTrace();
       return;
     }
@@ -132,12 +133,12 @@ public class Router {
     );
 
     if (!accepted) {
-      console.println("Your attach request has been rejected;");
+      console.log("Your attach request has been rejected;");
       linkChannel.close();
       return;
     }
 
-    console.println("Your attach request has been accepted;");
+    console.log("Your attach request has been accepted;");
 
     Link link = new Link(this.rd, new RouterDescription(processIP, processPort, simulatedIP), weight, linkChannel);
     this.portsTable.addLink(link);
@@ -149,12 +150,15 @@ public class Router {
    * broadcast Hello to neighbors
    */
   private void processStart() {
-    // for each link in port
-    // send HELLO
-    // The other link should get the hello and set themselves to INIT
-    // we should expect a HELLO back
-    // once we get a HELLO back, set our status as TWO WAYS
-    // send another HELLO to let the other router know its 2 ways
+    portsTable.getAllLinks().forEach(link -> {
+      LinkChannel ch = link.channel;
+      try {
+        link.otherRouter.status = RouterStatus.INIT;
+        ch.send(SOSPFMessageFactory.createHello(this.rd, link.otherRouter.simulatedIPAddress));
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    });
   }
 
   /**
@@ -177,7 +181,7 @@ public class Router {
   private void processNeighbors() {
     List<Link> neighbors = portsTable.getTwoWays();
     for (Link link : neighbors) {
-      console.println(link.otherRouter.simulatedIPAddress);
+      console.log(link.otherRouter.simulatedIPAddress);
     }
   }
 
@@ -265,6 +269,9 @@ public class Router {
    * process request from the remote router.
    * For example: when router2 tries to attach router1. Router1 can decide whether it will accept this request.
    * The intuition is that if router2 is an unknown/anomaly router, it is always safe to reject the attached request from router2.
+   * <br>
+   * This is only reserved for communicaton with unknown routers
+   * Known routers must communicate in their dedicated channels using {@link PacketHandler}
    */
   private void requestHandler(Socket socket) {
     try {
@@ -286,15 +293,13 @@ public class Router {
           ch.close();
         }
       }
-
-      console.print(">> ");
     } catch (IOException | ClassNotFoundException e) {
       e.printStackTrace();
     }
   }
 
   private SOSPFPacket handleAttachRequest(SOSPFPacket packet, LinkChannel linkChannel) {
-    console.println("\nReceived " + packet.displayString() + " from " + packet.srcIP);
+    console.log("\nReceived " + packet.displayString() + " from " + packet.srcIP);
 
     String answer;
     answer = console
@@ -304,7 +309,7 @@ public class Router {
     boolean accepted = answer.equalsIgnoreCase("y") && portsTable.hasFreePort();
 
     if (accepted) {
-      console.println("You accepted the attach request;");
+      console.log("You accepted the attach request;");
 
       Link link = new Link(
               this.rd,
@@ -317,24 +322,55 @@ public class Router {
 
     } else {
       if (!portsTable.hasFreePort()) {
-        console.println("No free ports, will reject the attach request;");
+        console.log("No free ports, will reject the attach request;");
       }
-      console.println("You rejected the attach request");
+      console.log("You rejected the attach request");
     }
 
     return SOSPFMessageFactory.createAttachResponse(rd, packet.srcIP, accepted);
   }
 
-  private void handleLinkPacket(SOSPFPacket packet) {
+  private void handleLinkPacket(SOSPFPacket packet, LinkChannel ch) {
     if (packet == null) {
       return;
     }
+    console.log("Received " + packet.displayString() + " FROM " + packet.srcIP + ";");
 
-    if (packet.sospfType == SOSPFPacket.SOSPFType.HELLO && packet.accepted != null) {
-      if (Boolean.TRUE.equals(packet.accepted)) {
-        console.println("Attach accepted by " + packet.srcIP + ";");
+    boolean isAttachRequestResponse = packet.sospfType == SOSPFPacket.SOSPFType.HELLO && packet.accepted != null;
+    if (isAttachRequestResponse) {
+      if (packet.accepted) {
+        console.log("Attach accepted by " + packet.srcIP + ";");
       } else {
-        console.println("Attach rejected by " + packet.srcIP + ";");
+        console.log("Attach rejected by " + packet.srcIP + ";");
+      }
+
+      return;
+    }
+
+    boolean isDBSyncHELLO = packet.sospfType == SOSPFPacket.SOSPFType.HELLO;
+    if (isDBSyncHELLO) {
+      String otherRouterIP = packet.srcIP;
+      Optional<Link> link = portsTable.get(otherRouterIP);
+
+      if (link.isEmpty()) {
+        // Not a neighbour, should not really end up in this state, for now just ignore the packet
+        return;
+      }
+
+      RouterStatus status = link.get().otherRouter.status;
+      if (status == null) {
+        link.get().otherRouter.status = RouterStatus.INIT;
+      } else if (status == RouterStatus.INIT) {
+        link.get().otherRouter.status = RouterStatus.TWO_WAY;
+      } else if (status == RouterStatus.TWO_WAY) {
+        return;
+      }
+
+      console.log("set " + otherRouterIP + " STATE to " + link.get().otherRouter.status.toString() + ";");
+      try {
+        ch.send(SOSPFMessageFactory.createHello(this.rd, otherRouterIP));
+      } catch (IOException e) {
+        throw new RuntimeException(e);
       }
     }
   }
@@ -371,7 +407,7 @@ public class Router {
       if (cmdLine.length >= 3) {
         processSend(cmdLine[1], cmdLine[2]);
       } else {
-        console.println("Usage: send [Destination IP] [Message]");
+        console.log("Usage: send [Destination IP] [Message]");
       }
     } else if (command.startsWith("update ")) {
       //update [port_number] [new_weight]
@@ -379,11 +415,11 @@ public class Router {
       if (cmdLine.length >= 3) {
         processUpdate(Short.parseShort(cmdLine[1]), Short.parseShort(cmdLine[2]));
       } else {
-        console.println("Usage: update [port_number] [new_weight]");
+        console.log("Usage: update [port_number] [new_weight]");
       }
     } else if (command.startsWith("port")) {
       // For debugging
-      console.println(this.portsTable.toString());
+      console.log(this.portsTable.toString());
       ;
     } else {
       //invalid command

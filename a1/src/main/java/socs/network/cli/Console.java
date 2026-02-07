@@ -25,13 +25,30 @@ public class Console implements Runnable {
     return commandQueue;
   }
 
-  public void println(String s) {
-    System.out.println(s);
+  // Prioritize using Console.log instead of the usual SOUT;
+  // Console.log clears the console beforehand so the CLI's UI remains not-messy.
+  public synchronized void log(String msg) {
+    this.log(msg, true);
   }
 
-  public void print(String s){
-    System.out.print(s);
+  public synchronized void log(String msg, boolean redraw) {
+    // Move to new line safely
+    System.out.print("\r");      // go to line start
+    System.out.print("\033[K");  // clear line (ANSI escape)
+
+    System.out.println(msg);     // print log
+
+    if (!redraw) {
+      return;
+    }
+
+    if (pendingPrompt == null) {
+      System.out.print(">> ");   // redraw prompt
+    } else {
+      System.out.print("$ ");    // redraw Y/N prompt
+    }
   }
+
 
   public boolean hasPrompt() {
     return pendingPrompt != null;
@@ -44,7 +61,7 @@ public class Console implements Runnable {
       if (pendingPrompt != null)
         throw new IllegalStateException("Prompt already active");
 
-      System.out.println(message);
+      this.log(message, false);
       System.out.print("$ ");
 
       pendingPrompt = input -> {
@@ -59,9 +76,11 @@ public class Console implements Runnable {
     running = false;
   }
 
+
   @Override
   public void run() {
     while (running) {
+      System.out.print(">> ");
       try {
         String line = reader.readLine();
         if (line == null) break; // stdin closed

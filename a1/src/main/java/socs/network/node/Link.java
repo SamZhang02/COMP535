@@ -2,6 +2,7 @@ package socs.network.node;
 
 import socs.network.message.SOSPFPacket;
 import socs.network.transport.LinkChannel;
+import socs.network.transport.PacketHandler;
 
 import java.io.IOException;
 
@@ -21,16 +22,22 @@ public class Link {
   }
 
   public void listen(PacketHandler handler) {
-    new Thread(() -> {
-      while (!Thread.currentThread().isInterrupted()) {
-        try {
-          SOSPFPacket packet = channel.receive();
-          handler.handle(packet);
-        } catch (IOException | ClassNotFoundException e) {
-          break;
-        }
-      }
-    }, "link-listener-" + otherRouter.simulatedIPAddress).start();
+    new Thread(
+            () -> {
+              while (!Thread.currentThread().isInterrupted()) {
+                try {
+                  SOSPFPacket packet = channel.receive();
+                  try {
+                    handler.handle(packet, this.channel);
+                  } catch (Exception e) {
+                    e.printStackTrace();
+                  }
+                } catch (IOException | ClassNotFoundException e) {
+                  break;
+                }
+              }
+            }, "link-listener-" + otherRouter.simulatedIPAddress
+    ).start();
   }
 
   public void delete() {
@@ -40,8 +47,8 @@ public class Link {
   @Override
   public String toString() {
     return "Link{" +
-            "ourRouter=" + ourRouter +
-            ", otherRouter=" + otherRouter +
+            "ourRouter=" + ourRouter.toString() +
+            ", otherRouter=" + otherRouter.toString() +
             ", weight=" + weight +
             '}';
   }

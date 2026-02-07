@@ -5,6 +5,11 @@ import socs.network.node.RouterDescription;
 import java.util.UUID;
 
 public class SOSPFMessageFactory {
+
+  public static SOSPFPacket createHello(RouterDescription srcRd, String dstSimulatedIp) {
+    return createHello(srcRd, dstSimulatedIp, "");
+  }
+
   public static SOSPFPacket createHello(RouterDescription srcRd, String dstSimulatedIp, String message) {
     return basePacket(srcRd, dstSimulatedIp)
             .setSospfType(SOSPFPacket.SOSPFType.HELLO)
