@@ -82,7 +82,7 @@ public class Router {
           String simulatedIP,
           short weight
   ) {
-    SOSPFPacket connectReqMessage = SOSPFMessageFactory.createHello(rd, simulatedIP, weight);
+    SOSPFPacket connectReqMessage = SOSPFMessageFactory.createHello(rd, simulatedIP, String.valueOf(weight));
 
     try {
       SOSPFPacket res =
@@ -135,7 +135,16 @@ public class Router {
    * broadcast Hello to neighbors
    */
   private void processStart() {
+    // for each link in port
+    // send HELLO
+    // The other link should get the hello and set themselves to INIT
+    // we should expect a HELLO back
+    // once we get a HELLO back, set our status as TWO WAYS
+    // send another HELLO to let the other router know its 2 ways
 
+    portsTable.getAllLinks().stream().parallel().map(
+            // TODO: function that does the 3 way flow
+    );
   }
 
   /**

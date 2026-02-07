@@ -10,6 +10,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 
 // Communication between routers should use RouterTransport
+// All Socket related I/O should only be done using this transport layer
 public class RouterTransport {
   private final ServerSocket serverSocket;
 
