@@ -1,16 +1,12 @@
 package socs.network.transport;
 
-import socs.network.message.SOSPFPacket;
 import socs.network.util.Configuration;
 
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 
-// Communication between routers should use RouterTransport
-// All Socket related I/O should only be done using this transport layer
+// Server thread to receive communications
 public class RouterTransport {
   private final ServerSocket serverSocket;
 
@@ -38,31 +34,6 @@ public class RouterTransport {
     t.setDaemon(true);
     t.start();
     return t;
-  }
-
-  public SOSPFPacket sendAndWait(String ip, int port, SOSPFPacket msg)
-          throws IOException, ClassNotFoundException {
-
-    try (Socket socket = new Socket(ip, port);
-         ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-         ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
-
-      out.writeObject(msg);
-      out.flush();
-      return (SOSPFPacket) in.readObject();
-    }
-  }
-
-  public void send(String ip, int port, SOSPFPacket msg) {
-    new Thread(() -> {
-      try (Socket socket = new Socket(ip, port);
-           ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream())) {
-
-        out.writeObject(msg);
-        out.flush();
-      } catch (IOException ignored) {
-      }
-    }).start();
   }
 
   private void handle(Socket socket, RequestHandler handler) throws IOException {
