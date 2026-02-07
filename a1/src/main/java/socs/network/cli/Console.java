@@ -20,6 +20,19 @@ public class Console implements Runnable {
 
   private volatile boolean running = true;
   private volatile Prompt pendingPrompt = null;
+  private Thread consoleThread = null;
+
+  public synchronized Thread start() {
+    if (consoleThread != null && consoleThread.isAlive()) {
+      return consoleThread;
+    }
+
+    running = true;
+    consoleThread = new Thread(this, "console-thread");
+    consoleThread.setDaemon(true);
+    consoleThread.start();
+    return consoleThread;
+  }
 
   public BlockingQueue<String> getCommandQueue() {
     return commandQueue;
@@ -74,6 +87,10 @@ public class Console implements Runnable {
 
   public void stop() {
     running = false;
+    Thread t = consoleThread;
+    if (t != null) {
+      t.interrupt();
+    }
   }
 
 

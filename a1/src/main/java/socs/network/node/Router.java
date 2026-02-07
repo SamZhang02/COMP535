@@ -20,7 +20,7 @@ public class Router {
   RouterDescription rd = new RouterDescription();
   protected LinkStateDatabase lsd;
 
-  private Console console;
+  private final Console console;
   private final RouterTransport routerTransport;
   private final PortsTable portsTable;
   private final ErrorHandler errorHandler;
@@ -46,7 +46,7 @@ public class Router {
     this.rd.print();
 
     Thread clientServiceThread = this.routerTransport.serve(this::requestHandler, this.errorHandler);
-    Thread consoleThread = this.startConsoleThread();
+    console.start();
 
     try {
       while (true) {
@@ -261,16 +261,6 @@ public class Router {
    */
   private void handleApplicationMessage(SOSPFPacket packet) {
 
-  }
-
-
-  private Thread startConsoleThread() {
-    console = new Console();
-    Thread consoleThread = new Thread(console, "console-thread");
-    consoleThread.setDaemon(true);
-
-    consoleThread.start();
-    return consoleThread;
   }
 
   /**
