@@ -55,7 +55,7 @@ public class PortsTable {
 
   public void removeLink(Link link) {
     for (int i = 0; i < this.capacity; i++) {
-      if (this.ports[i].equals(link)) {
+      if (this.ports[i] != null && this.ports[i].equals(link)) {
         this.ports[i] = null;
       }
     }
