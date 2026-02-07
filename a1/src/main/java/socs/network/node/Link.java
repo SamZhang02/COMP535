@@ -1,6 +1,7 @@
 package socs.network.node;
 
 import socs.network.message.SOSPFPacket;
+import socs.network.transport.ErrorHandler;
 import socs.network.transport.LinkChannel;
 import socs.network.transport.PacketHandler;
 
@@ -21,7 +22,7 @@ public class Link {
     this.channel = channel;
   }
 
-  public void listen(PacketHandler handler) {
+  public void listen(PacketHandler handler, ErrorHandler errorHandler) {
     new Thread(
             () -> {
               while (!Thread.currentThread().isInterrupted()) {
@@ -30,9 +31,10 @@ public class Link {
                   try {
                     handler.handle(packet, this.channel);
                   } catch (Exception e) {
-                    e.printStackTrace();
+                    errorHandler.handle(e);
                   }
                 } catch (IOException | ClassNotFoundException e) {
+                  errorHandler.handle(e);
                   break;
                 }
               }

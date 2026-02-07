@@ -4,6 +4,7 @@ import socs.network.cli.Console;
 import socs.network.message.SOSPFMessageFactory;
 import socs.network.message.SOSPFPacket;
 import socs.network.node.ports.PortsTable;
+import socs.network.transport.ErrorHandler;
 import socs.network.transport.LinkChannel;
 import socs.network.transport.PacketHandler;
 import socs.network.transport.RouterTransport;
@@ -11,6 +12,7 @@ import socs.network.util.Configuration;
 
 import java.io.IOException;
 import java.net.Socket;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,6 +23,7 @@ public class Router {
   private Console console;
   private final RouterTransport routerTransport;
   private final PortsTable portsTable;
+  private final ErrorHandler errorHandler;
 
 
   public Router(Configuration config, RouterTransport rt, Console console, PortsTable portsTable) {
@@ -33,12 +36,13 @@ public class Router {
     routerTransport = rt;
     this.console = console;
     this.portsTable = portsTable;
+    this.errorHandler = Exception::printStackTrace;
   }
 
   public void terminal() {
     this.rd.print();
 
-    Thread clientServiceThread = this.routerTransport.serve(this::requestHandler);
+    Thread clientServiceThread = this.routerTransport.serve(this::requestHandler, this.errorHandler);
     Thread consoleThread = this.startConsoleThread();
 
     try {
@@ -142,7 +146,7 @@ public class Router {
 
     Link link = new Link(this.rd, new RouterDescription(processIP, processPort, simulatedIP), weight, linkChannel);
     this.portsTable.addLink(link);
-    link.listen(this::handleLinkPacket);
+    link.listen(this::handleLinkPacket, this.errorHandler);
   }
 
 
@@ -318,7 +322,7 @@ public class Router {
               linkChannel
       );
       this.portsTable.addLink(link);
-      link.listen(this::handleLinkPacket);
+      link.listen(this::handleLinkPacket, this.errorHandler);
 
     } else {
       if (!portsTable.hasFreePort()) {
@@ -376,23 +380,28 @@ public class Router {
   }
 
   private boolean handleCommand(String command) {
-    if (command.startsWith("detect ")) {
+    if (command.startsWith("detect")) {
       String[] cmdLine = command.split(" ");
       processDetect(cmdLine[1]);
-    } else if (command.startsWith("disconnect ")) {
+    } else if (command.startsWith("disconnect")) {
       String[] cmdLine = command.split(" ");
       processDisconnect(Short.parseShort(cmdLine[1]));
     } else if (command.startsWith("quit")) {
       processQuit();
-    } else if (command.startsWith("attach ")) {
+    } else if (command.startsWith("attach")) {
       String[] cmdLine = command.split(" ");
-      processAttach(
-              cmdLine[1], Short.parseShort(cmdLine[2]),
-              cmdLine[3], Short.parseShort(cmdLine[4])
-      );
+      console.log(Arrays.toString(cmdLine));
+      if (cmdLine.length < 5) {
+        console.log("Usage: attach [process IP] [process port] [simulated IP] [weight]");
+      } else {
+        processAttach(
+                cmdLine[1], Short.parseShort(cmdLine[2]),
+                cmdLine[3], Short.parseShort(cmdLine[4])
+        );
+      }
     } else if (command.equals("start")) {
       processStart();
-    } else if (command.equals("connect ")) {
+    } else if (command.equals("connect")) {
       String[] cmdLine = command.split(" ");
       processConnect(
               cmdLine[1], Short.parseShort(cmdLine[2]),
@@ -401,7 +410,7 @@ public class Router {
     } else if (command.equals("neighbors")) {
       //output neighbors
       processNeighbors();
-    } else if (command.startsWith("send ")) {
+    } else if (command.startsWith("send")) {
       //send [Destination IP] [Message]
       String[] cmdLine = command.split(" ", 3);
       if (cmdLine.length >= 3) {
@@ -409,7 +418,7 @@ public class Router {
       } else {
         console.log("Usage: send [Destination IP] [Message]");
       }
-    } else if (command.startsWith("update ")) {
+    } else if (command.startsWith("update")) {
       //update [port_number] [new_weight]
       String[] cmdLine = command.split(" ");
       if (cmdLine.length >= 3) {

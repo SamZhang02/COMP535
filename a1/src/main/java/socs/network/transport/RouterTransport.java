@@ -14,7 +14,7 @@ public class RouterTransport {
     this.serverSocket = new ServerSocket(config.getShort("socs.network.router.port"));
   }
 
-  public Thread serve(RequestHandler handler) {
+  public Thread serve(RequestHandler handler, ErrorHandler errorHandler) {
     Thread t = new Thread(() -> {
       while (!Thread.currentThread().isInterrupted()) {
         try {
@@ -23,10 +23,11 @@ public class RouterTransport {
             try {
               handle(socket, handler);
             } catch (IOException e) {
-              throw new RuntimeException(e);
+              errorHandler.handle(e);
             }
           }).start();
         } catch (IOException e) {
+          errorHandler.handle(e);
           break;
         }
       }
