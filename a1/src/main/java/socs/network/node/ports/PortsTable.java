@@ -37,7 +37,7 @@ public class PortsTable {
     return this.available() > 0;
   }
 
-  public void addLink(Link link) throws PortsTableException{
+  public void addLink(Link link) throws PortsTableException {
     int freeIdx = getFreePortIdx();
     if (freeIdx == -1) {
       throw new PortsTableException("No free ports available");
@@ -66,8 +66,8 @@ public class PortsTable {
     for (int i = 0; i < this.capacity; i++) {
       Link port = this.ports[i];
       if (port != null &&
-              port.router2 != null &&
-              simulatedIP.equals(port.router2.simulatedIPAddress)) {
+              port.otherRouter != null &&
+              simulatedIP.equals(port.otherRouter.simulatedIPAddress)) {
         return true;
       }
     }

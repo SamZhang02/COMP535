@@ -2,21 +2,21 @@ package socs.network.node;
 
 public class Link {
 
-  public RouterDescription router1; // This should be OUR router
-  public RouterDescription router2; // This is the OTHER router
+  public RouterDescription ourRouter; // This should be OUR router
+  public RouterDescription otherRouter; // This is the OTHER router
   public int weight;
 
-  public Link(RouterDescription r1, RouterDescription r2, int weight) {
-    this.router1 = r1;
-    this.router2 = r2;
+  public Link(RouterDescription ourRouter, RouterDescription otherRouter, int weight) {
+    this.ourRouter = ourRouter;
+    this.otherRouter = otherRouter;
     this.weight = weight;
   }
 
   @Override
   public String toString() {
     return "Link{" +
-            "router1=" + router1 +
-            ", router2=" + router2 +
+            "ourRouter=" + ourRouter +
+            ", otherRouter=" + otherRouter +
             ", weight=" + weight +
             '}';
   }
