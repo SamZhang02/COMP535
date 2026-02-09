@@ -10,3 +10,6 @@ package:
 run arg:
 	mvn clean package assembly:single
 	java -jar target/COMP535-1.0-SNAPSHOT-jar-with-dependencies.jar {{arg}}
+
+test:
+	mvn test
