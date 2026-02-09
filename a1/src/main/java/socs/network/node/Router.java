@@ -156,16 +156,19 @@ public class Router {
    * broadcast Hello to neighbors
    */
   private void processStart() {
-    portsTable.getAllLinks().forEach(link -> {
-      LinkChannel ch = link.channel;
-      try {
-        link.helloInitiatedByMe = true;
-        link.otherRouter.status = RouterStatus.INIT;
-        ch.send(SOSPFMessageFactory.createHello(this.rd, link.otherRouter.simulatedIPAddress));
-      } catch (IOException e) {
-        e.printStackTrace();
-      }
-    });
+    portsTable.getAllLinks()
+            .stream()
+            .filter(link -> link.otherRouter.status == null)
+            .forEach(link -> {
+              LinkChannel ch = link.channel;
+              try {
+                link.helloInitiatedByMe = true;
+                link.otherRouter.status = RouterStatus.INIT;
+                ch.send(SOSPFMessageFactory.createHello(this.rd, link.otherRouter.simulatedIPAddress));
+              } catch (IOException e) {
+                e.printStackTrace();
+              }
+            });
   }
 
   /**
