@@ -8,13 +8,18 @@ import socs.network.transport.PacketHandler;
 import java.io.EOFException;
 import java.io.IOException;
 
+/**
+ * A Link maintains information of which router our router is attached to;
+ * For each router attached to, we keep an open socket maintained through {@link LinkChannel}
+ * with them for frequent communication.
+ */
 public class Link {
 
   public RouterDescription ourRouter;
   public RouterDescription otherRouter;
   public int weight;
 
-  public LinkChannel channel; // When establishing a link, need to open a socket for communication
+  public LinkChannel channel;
   public boolean helloInitiatedByMe;
 
   public Link(RouterDescription ourRouter, RouterDescription otherRouter, int weight, LinkChannel channel) {
