@@ -1,6 +1,7 @@
 package socs.network;
 
 import socs.network.cli.Console;
+import socs.network.cli.CLI;
 import socs.network.node.Router;
 import socs.network.node.ports.PortsTable;
 import socs.network.transport.RouterTransport;
@@ -23,7 +24,8 @@ public class Main {
     PortsTable portsManager = new PortsTable(NUM_PORTS);
 
     Router r = new Router(config, routerTransport, console, portsManager);
+    CLI cli = new CLI(r, console);
 
-    r.terminal();
+    cli.start();
   }
 }

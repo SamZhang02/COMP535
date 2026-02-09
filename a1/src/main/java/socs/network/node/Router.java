@@ -23,6 +23,7 @@ public class Router {
   private final RouterTransport routerTransport;
   private final PortsTable portsTable;
   private final ErrorHandler errorHandler;
+  private Thread clientServiceThread;
 
 
   public Router(Configuration config, RouterTransport rt, Console console, PortsTable portsTable) {
@@ -41,22 +42,21 @@ public class Router {
     };
   }
 
-  public void terminal() {
+  public synchronized void start() {
     this.rd.print();
 
-    Thread clientServiceThread = this.routerTransport.serve(this::requestHandler, this.errorHandler);
-    console.start();
+    if (clientServiceThread != null && clientServiceThread.isAlive()) {
+      return;
+    }
 
-    try {
-      while (true) {
-        String command = console.getCommandQueue().take();
-        if (!handleCommand(command)) break;
-      }
-    } catch (Exception e) {
-      e.printStackTrace();
-    } finally {
-      clientServiceThread.interrupt();
-      console.stop();
+    clientServiceThread = this.routerTransport.serve(this::requestHandler, this.errorHandler);
+  }
+
+  public synchronized void stop() {
+    Thread thread = clientServiceThread;
+    if (thread != null) {
+      thread.interrupt();
+      clientServiceThread = null;
     }
   }
 
@@ -68,7 +68,7 @@ public class Router {
    *
    * @param destinationIP the ip adderss of the destination simulated router
    */
-  private void processDetect(String destinationIP) {
+  public void processDetect(String destinationIP) {
 
   }
 
@@ -78,28 +78,8 @@ public class Router {
    *
    * @param portNumber the port number which the link attaches at
    */
-  private void processDisconnect(short portNumber) {
+  public void processDisconnect(short portNumber) {
 
-  }
-
-  private boolean askAttach(
-          LinkChannel linkChannel,
-          String processIP,
-          short processPort,
-          String simulatedIP,
-          short weight
-  ) {
-    SOSPFPacket connectReqMessage = SOSPFMessageFactory.createHello(rd, simulatedIP, String.valueOf(weight));
-
-    try {
-      linkChannel.send(connectReqMessage);
-      SOSPFPacket res = linkChannel.receive();
-
-      return res != null && Boolean.TRUE.equals(res.accepted);
-
-    } catch (IOException | ClassNotFoundException e) {
-      return false;
-    }
   }
 
   /**
@@ -109,7 +89,7 @@ public class Router {
    * <p/>
    * NOTE: this command should not trigger link database synchronization
    */
-  private void processAttach(
+  public void processAttach(
           String processIP,
           short processPort,
           String simulatedIP,
@@ -132,8 +112,6 @@ public class Router {
 
     accepted = askAttach(
             linkChannel,
-            processIP,
-            processPort,
             simulatedIP,
             weight
     );
@@ -155,7 +133,7 @@ public class Router {
   /**
    * broadcast Hello to neighbors
    */
-  private void processStart() {
+  public void processStart() {
     portsTable.getAllLinks()
             .stream()
             .filter(link -> link.otherRouter.status == null)
@@ -178,7 +156,7 @@ public class Router {
    * <p/>
    * This command does trigger the link database synchronization
    */
-  private void processConnect(
+  public void processConnect(
           String processIP, short processPort,
           String simulatedIP, short weight
   ) {
@@ -188,7 +166,7 @@ public class Router {
   /**
    * output the neighbors of the routers
    */
-  private void processNeighbors() {
+  public void processNeighbors() {
     List<Link> neighbors = portsTable.getTwoWays();
     for (Link link : neighbors) {
       console.log(link.otherRouter.simulatedIPAddress);
@@ -198,14 +176,14 @@ public class Router {
   /**
    * disconnect with all neighbors and quit the program
    */
-  private void processQuit() {
+  public void processQuit() {
 
   }
 
   /**
    * update the weight of an attached link
    */
-  private void updateWeight(
+  public void updateWeight(
           String processIP, short processPort,
           String simulatedIP, short weight
   ) {
@@ -220,7 +198,7 @@ public class Router {
    * @param portNumber the port number (0-3) to update
    * @param newWeight  the new weight/cost for the link attached to this port
    */
-  private void processUpdate(short portNumber, short newWeight) {
+  public void processUpdate(short portNumber, short newWeight) {
 
   }
 
@@ -242,7 +220,7 @@ public class Router {
    * @param destinationIP the simulated IP address of the destination router
    * @param message       the message content to send
    */
-  private void processSend(String destinationIP, String message) {
+  public void processSend(String destinationIP, String message) {
 
   }
 
@@ -297,6 +275,25 @@ public class Router {
       e.printStackTrace();
     }
   }
+
+  private boolean askAttach(
+          LinkChannel linkChannel,
+          String simulatedIP,
+          short weight
+  ) {
+    SOSPFPacket connectReqMessage = SOSPFMessageFactory.createHello(rd, simulatedIP, String.valueOf(weight));
+
+    try {
+      linkChannel.send(connectReqMessage);
+      SOSPFPacket res = linkChannel.receive();
+
+      return res != null && Boolean.TRUE.equals(res.accepted);
+
+    } catch (IOException | ClassNotFoundException e) {
+      return false;
+    }
+  }
+
 
   private SOSPFPacket handleAttachRequest(SOSPFPacket packet, LinkChannel linkChannel) {
     console.log("\nReceived " + packet.displayString() + " from " + packet.srcIP);
@@ -385,60 +382,7 @@ public class Router {
     }
   }
 
-  private boolean handleCommand(String command) {
-    if (command.startsWith("detect")) {
-      String[] cmdLine = command.split(" ");
-      processDetect(cmdLine[1]);
-    } else if (command.startsWith("disconnect")) {
-      String[] cmdLine = command.split(" ");
-      processDisconnect(Short.parseShort(cmdLine[1]));
-    } else if (command.startsWith("quit")) {
-      processQuit();
-    } else if (command.startsWith("attach")) {
-      String[] cmdLine = command.split(" ");
-      if (cmdLine.length < 5) {
-        console.log("Usage: attach [process IP] [process port] [simulated IP] [weight]");
-      } else {
-        processAttach(
-                cmdLine[1], Short.parseShort(cmdLine[2]),
-                cmdLine[3], Short.parseShort(cmdLine[4])
-        );
-      }
-    } else if (command.equals("start")) {
-      processStart();
-    } else if (command.equals("connect")) {
-      String[] cmdLine = command.split(" ");
-      processConnect(
-              cmdLine[1], Short.parseShort(cmdLine[2]),
-              cmdLine[3], Short.parseShort(cmdLine[4])
-      );
-    } else if (command.equals("neighbors")) {
-      //output neighbors
-      processNeighbors();
-    } else if (command.startsWith("send")) {
-      //send [Destination IP] [Message]
-      String[] cmdLine = command.split(" ", 3);
-      if (cmdLine.length >= 3) {
-        processSend(cmdLine[1], cmdLine[2]);
-      } else {
-        console.log("Usage: send [Destination IP] [Message]");
-      }
-    } else if (command.startsWith("update")) {
-      //update [port_number] [new_weight]
-      String[] cmdLine = command.split(" ");
-      if (cmdLine.length >= 3) {
-        processUpdate(Short.parseShort(cmdLine[1]), Short.parseShort(cmdLine[2]));
-      } else {
-        console.log("Usage: update [port_number] [new_weight]");
-      }
-    } else if (command.startsWith("port")) {
-      // For debugging
-      console.log(this.portsTable.toString());
-      ;
-    } else {
-      //invalid command
-      return false;
-    }
-    return true;
+  public void processPort() {
+    console.log(this.portsTable.toString());
   }
 }
