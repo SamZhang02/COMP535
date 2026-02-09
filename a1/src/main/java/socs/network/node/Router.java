@@ -95,6 +95,11 @@ public class Router {
           String simulatedIP,
           short weight
   ) {
+    if (processIP.equals(rd.processIPAddress) && processPort == rd.processPortNumber) {
+      console.log("Can't attach to yourself;");
+      return;
+    }
+
     if (!portsTable.hasFreePort()) {
       console.log("Can't attach any more ports;");
       return;
