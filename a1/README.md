@@ -43,40 +43,86 @@ mvn clean package assembly:single
 java -jar target/COMP535-1.0-SNAPSHOT-jar-with-dependencies.jar conf/router1.conf
 ```
 
-## Troubleshooting
+## Scripts
 
-### "JAVA_HOME not set" error
-- Make sure Java is installed and JAVA_HOME environment variable points to your Java installation
-- On Linux/Mac: `export JAVA_HOME=/path/to/java`
-- On Windows: Set JAVA_HOME in System Environment Variables
+There is a justfile with scripts for building, running and testing the program.
 
-### "Maven not found" error
-- Make sure Maven is installed and added to your PATH
-- Verify with: `mvn -version`
+```just
+just build
+```
 
-### Compilation errors
-- Ensure you have Java 8 or higher installed
-- Ensure you have Maven 3.0 or higher installed
-- Try: `mvn clean compile` to rebuild from scratch
+```just
+just test
+```
 
-### "Could not find or load main class" error
-- Make sure you built the JAR file: `mvn clean package assembly:single`
-- Verify the JAR exists: `ls target/COMP535-1.0-SNAPSHOT-jar-with-dependencies.jar`
-- Rebuild the project: `mvn clean package assembly:single`
-- Use the correct command: `java -jar target/COMP535-1.0-SNAPSHOT-jar-with-dependencies.jar conf/router1.conf`
+```just
+just run conf/router1.conf
+```
 
-### Maven settings.xml warning
-- If you see a warning about "Unrecognised tag: 'blocked'" in Maven settings.xml, you can safely ignore it
-- This is a system-level Maven configuration issue and does not affect the build
-- The build will still succeed despite this warning
+## Implementation
+
+### CLI
+
+The CLI is the primary module for all command line related operations, including argument parsing, validation and sdout
+display. We refactored `terminal` out of `Router` into this class.
+
+It contains a `Console` class, which runs on its own thread and is responsible for any text displayed on the terminal.
+This was done to consolidate it as a single source of truth for text display, and also manage the state of the frontend
+when an attach request comes in; When a router an attach request, it must display a modal and take user input for
+accepting/rejecting the input, therefore this state must be managed by itself.
+
+### Router
+
+Router is the primary class. It manages a server thread (using a light wrapper `RouterTransport`) that services all
+incoming requests from unknown routers (for now, only attach requests come from unknown routers).
+It also is the entry point for every command after CLI has done validation. When processing a command, the Router class
+uses the correct dependencies to fulfill the demand.
+
+### PortsTable
+
+We refactored out the ports array into a ports table for all operations, so the Router does not have to manage a raw
+array. This also makes synchronization easier.
+
+The port table manages a fixed numbers of ports, each port can contain a `Link`.
+
+For now we just made all mutatable functions synchronized. For better performance, we may read a read write lock in the
+future to save time on read operations.
+
+### Link
+
+Each link contains the information of our router and the router that we are attached to, as well as an open socket to
+maintain persistent peer to peer connection to the attached router. Each link contains a `Channel`. When listening for
+messages, it uses a specific handler for neighbour communication.
+
+Each link runs its own thread that listens and services requests from neighbouring routers.
+
+### Channel
+
+Channel manages the I/O of a specific socket, it lightly wraps a `Socket` class to abstract sending and receiving a
+`SOSPFPPacket`.
+
+## Assumptions
+
+We also made some assupmptions on the behaviour of the application for edge cases.
+
+1. We assume that when a router is being asked for attach, other requests that come in get auto rejected until the
+   router makes a y/n choice.
+2. We assume that all routers will use our implementation, i.e. the packet will always follow the SOSPFPacket protocol
+   implemented in this repo
+3. We did not implement much handling for connection issues, if a router goes down (socket closed), for now the
+   application just prints
+   it out.
 
 ## Project Structure
 
 ```
 src/
   main/
-    java/          # Source code
-  resources/       # Configuration files
-conf/              # Router configuration files
-target/            # Compiled classes (generated)
+    java/               # Source code
+  resources/            # Configuration files
+  test/
+    integration-test/   # Integration tests
+    java/               # Unit tests
+conf/                   # Router configuration files
+target/                 # Compiled classes (generated)
 ```
