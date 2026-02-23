@@ -1,0 +1,555 @@
+<hr>
+<p>title: &quot;COMP535 Midterm Practice — Concepts to Remember&quot;
+author: &quot;&quot;</p>
+<h2 id="date-">date: &quot;&quot;</h2>
+<h1 id="comp535-midterm-practice-concepts-to-remember">COMP535 Midterm Practice — Concepts to Remember</h1>
+<p>This document consolidates the concepts covered in the midterm practice set into a structured study guide. It focuses on what you must <em>know</em>, what you must be able to <em>do</em>, and the <em>typical failure modes</em> in exam-style questions.</p>
+<hr>
+<h2 id="table-of-contents">Table of Contents</h2>
+<ol>
+<li><a href="#osi-model">OSI Model</a></li>
+<li><a href="#switching-and-store-and-forward">Switching and Store-and-Forward</a></li>
+<li><a href="#reliable-data-transfer-rdt">Reliable Data Transfer (RDT)</a></li>
+<li><a href="#forwarding-and-routing-tables-datagrams-vs-vc">Forwarding and Routing Tables (Datagrams vs VC)</a></li>
+<li><a href="#end-to-end-delay-on-multi-hop-paths">End-to-End Delay on Multi-Hop Paths</a></li>
+<li><a href="#error-detection-crc">Error Detection: CRC</a></li>
+<li><a href="#error-detection-internet-checksum">Error Detection: Internet Checksum</a></li>
+<li><a href="#ethernet-csmacd-collision--timing">Ethernet (CSMA/CD): Collision + Timing</a></li>
+<li><a href="#line-encoding-nrz-manchester-nrzi">Line Encoding: NRZ, Manchester, NRZI</a></li>
+<li><a href="#ip-addressing-vs-mac-addressing">IP Addressing vs MAC Addressing</a></li>
+<li><a href="#ipv4-fragmentation-and-reassembly">IPv4 Fragmentation and Reassembly</a></li>
+<li><a href="#ip-vs-mac-when-moving-networks">IP vs MAC When Moving Networks</a></li>
+<li><a href="#subnetting-essentials">Subnetting Essentials</a></li>
+<li><a href="#routing-with-subnets--longest-prefix-match">Routing with Subnets + Longest Prefix Match</a></li>
+<li><a href="#link-state-routing-dijkstra">Link-State Routing (Dijkstra)</a></li>
+<li><a href="#distance-vector-routing-bellman-ford">Distance Vector Routing (Bellman-Ford)</a></li>
+<li><a href="#quick-concept-questions">Quick Concept Questions</a></li>
+<li><a href="#high-yield-computational-skills-checklist">High-Yield Computational Skills Checklist</a></li>
+</ol>
+<hr>
+<h1 id="osi-model">OSI Model</h1>
+<h2 id="the-seven-layers-top-bottom-">The Seven Layers (Top → Bottom)</h2>
+<ol>
+<li><strong>Application</strong>  <ul>
+<li>Application-specific protocols and services.</li>
+</ul>
+</li>
+<li><strong>Presentation</strong>  <ul>
+<li>Data representation and translation (e.g., encoding formats).</li>
+</ul>
+</li>
+<li><strong>Session</strong>  <ul>
+<li>Connection management, dialog control (request/response patterns; RPC concept).</li>
+</ul>
+</li>
+<li><strong>Transport</strong>  <ul>
+<li>Process-to-process communication.</li>
+<li>Reliability, flow control, congestion control (e.g., TCP).</li>
+</ul>
+</li>
+<li><strong>Network</strong>  <ul>
+<li>Host-to-host packet delivery.</li>
+<li>Forwarding + routing (e.g., IP).</li>
+</ul>
+</li>
+<li><strong>Data Link</strong>  <ul>
+<li>Framing, MAC addressing, error detection/correction on a link.</li>
+<li>Medium access (e.g., CSMA/CD in Ethernet).</li>
+</ul>
+</li>
+<li><strong>Physical</strong>  <ul>
+<li>Transmission of raw bits over the medium.</li>
+</ul>
+</li>
+</ol>
+<h2 id="what-you-should-be-able-to-do">What you should be able to do</h2>
+<ul>
+<li>Identify which layer provides a given functionality (e.g., reliability → Transport).</li>
+<li>Explain why some functions must be end-to-end (e.g., reliability) while others are hop-by-hop (e.g., framing).</li>
+</ul>
+<hr>
+<h1 id="switching-and-store-and-forward">Switching and Store-and-Forward</h1>
+<h2 id="store-and-forward-transmission">Store-and-Forward Transmission</h2>
+<ul>
+<li>A switch/router <strong>receives the entire packet</strong> (or frame) before forwarding it.</li>
+<li>This is characteristic of <strong>packet switching</strong> (not circuit switching).</li>
+</ul>
+<h2 id="packet-switching-vs-circuit-switching">Packet Switching vs Circuit Switching</h2>
+<ul>
+<li><strong>Circuit switching</strong>: reserves resources end-to-end; consistent latency; inefficient when idle.</li>
+<li><strong>Packet switching</strong>: statistical multiplexing; efficient; variable delay/queueing.</li>
+</ul>
+<hr>
+<h1 id="reliable-data-transfer-rdt-">Reliable Data Transfer (RDT)</h1>
+<p>This section covers constraints and reasoning patterns used in Selective Repeat and Go-Back-N.</p>
+<h2 id="selective-repeat-sr-">Selective Repeat (SR)</h2>
+<h3 id="key-ambiguity-constraint-sequence-number-bits-vs-window-size">Key ambiguity constraint: sequence number bits vs window size</h3>
+<p>Let:</p>
+<ul>
+<li><code>N</code> = sequence number space size = <code>2^k</code> for <code>k</code> bits</li>
+<li><code>W</code> = sender window size (and receiver window size in SR)</li>
+</ul>
+<p><strong>Constraint to avoid ambiguity</strong>:</p>
+<ul>
+<li><code>N &gt;= 2W</code>  (often stated as <code>W &lt;= N/2</code>)</li>
+</ul>
+<p><strong>Why</strong>: after wraparound, an old packet could be mistaken for a new one unless the window is small enough relative to the sequence space.</p>
+<h3 id="what-you-should-be-able-to-do">What you should be able to do</h3>
+<ul>
+<li>Given <code>W</code>, compute minimum <code>k</code> such that <code>2^k &gt;= 2W</code>.</li>
+<li>Explain ambiguity with wraparound using a short example.</li>
+</ul>
+<hr>
+<h2 id="go-back-n-gbn-">Go-Back-N (GBN)</h2>
+<h3 id="properties">Properties</h3>
+<ul>
+<li>Sender maintains a window of unACKed packets.</li>
+<li>Receiver only accepts <strong>in-order</strong> packets (typically discards out-of-order).</li>
+<li>ACKs are <strong>cumulative</strong>: ACK <code>k</code> means “received everything up to <code>k</code> (or next expected = k+1 depending on convention).”</li>
+</ul>
+<h3 id="typical-exam-reasoning-patterns">Typical exam reasoning patterns</h3>
+<ul>
+<li>Identify the receiver’s next expected sequence number <code>k</code>.</li>
+<li>If medium does not reorder:<ul>
+<li>Packets that have been sent but not ACKed form a contiguous range.</li>
+<li>Sender window consists of <strong>consecutive sequence numbers</strong>.</li>
+</ul>
+</li>
+</ul>
+<h3 id="what-you-should-be-able-to-do">What you should be able to do</h3>
+<ul>
+<li>List all possible sender-window contents given receiver expectation <code>k</code> and window size <code>W</code>.</li>
+<li>Determine possible ACK values in flight back to the sender given the constraints.</li>
+</ul>
+<hr>
+<h1 id="forwarding-and-routing-tables-datagrams-vs-vc-">Forwarding and Routing Tables (Datagrams vs VC)</h1>
+<h2 id="datagram-forwarding-ip-style-">Datagram Forwarding (IP-style)</h2>
+<ul>
+<li>Each packet is routed independently.</li>
+<li>Switch/router uses a <strong>routing table</strong> mapping destination prefixes (or destinations) to outgoing interfaces.</li>
+<li>No per-flow state required.</li>
+</ul>
+<h3 id="what-you-should-be-able-to-do">What you should be able to do</h3>
+<ul>
+<li>Given a network diagram with interface labels, build routing tables that map destinations to correct next hops/interfaces.</li>
+</ul>
+<hr>
+<h2 id="virtual-circuit-vc-forwarding">Virtual Circuit (VC) Forwarding</h2>
+<ul>
+<li>A VC is established along a path before data transfer.</li>
+<li>Each switch keeps a <strong>VC table</strong> mapping:<ul>
+<li><code>(incoming interface, incoming VCI)</code> → <code>(outgoing interface, outgoing VCI)</code></li>
+</ul>
+</li>
+</ul>
+<h3 id="vci-allocation-rule-typical-in-problems-">VCI allocation rule (typical in problems)</h3>
+<ul>
+<li>“Always use the smallest available VCI.”</li>
+<li>VCIs are <strong>local identifiers</strong>: the number can change hop-to-hop.</li>
+</ul>
+<h3 id="what-you-should-be-able-to-do">What you should be able to do</h3>
+<ul>
+<li>For a sequence of VC setup requests, update per-switch VC tables correctly.</li>
+<li>Track VCI availability per interface.</li>
+</ul>
+<h3 id="core-tradeoff-summary">Core tradeoff summary</h3>
+<ul>
+<li>Datagram: flexible, no setup, robust to failure; but routing decision per packet.</li>
+<li>VC: potentially faster forwarding and consistent path; but setup overhead and failure complexity.</li>
+</ul>
+<hr>
+<h1 id="end-to-end-delay-on-multi-hop-paths">End-to-End Delay on Multi-Hop Paths</h1>
+<h2 id="delay-components">Delay components</h2>
+<ul>
+<li><strong>Transmission delay</strong>: <code>p / s</code><br>where <code>p</code> = packet size (bits), <code>s</code> = link rate (bps)</li>
+<li><strong>Propagation delay</strong>: <code>d</code> (seconds)</li>
+<li><strong>Processing and queueing delay</strong>: often assumed zero in exam setups unless stated.</li>
+</ul>
+<h2 id="store-and-forward-multi-hop-behavior">Store-and-forward multi-hop behavior</h2>
+<p>On a path A → B → C → D:</p>
+<ul>
+<li>Each hop requires transmission + propagation.</li>
+<li>Bottleneck link (slowest rate) dominates spacing between successive packets.</li>
+</ul>
+<h2 id="back-to-back-packet-timing-pattern">Back-to-back packet timing pattern</h2>
+<p>If A sends 2 packets back-to-back:</p>
+<ul>
+<li>The start time of packet 2 is typically delayed by:<ul>
+<li>transmission time of packet 1 on the first link + propagation (depending on how the problem defines “back-to-back” in time).</li>
+</ul>
+</li>
+</ul>
+<h3 id="what-you-should-be-able-to-do">What you should be able to do</h3>
+<ul>
+<li>Compute arrival time of the <strong>last bit</strong> of the second packet at the destination.</li>
+<li>Identify where packet spacing increases (at slower links) and where it can compress (at faster links).</li>
+</ul>
+<hr>
+<h1 id="error-detection-crc">Error Detection: CRC</h1>
+<h2 id="crc-basics">CRC basics</h2>
+<p>Given:</p>
+<ul>
+<li>Data bits <code>D</code></li>
+<li>Generator polynomial <code>G(x)</code> of degree <code>r</code></li>
+</ul>
+<p>Steps:</p>
+<ol>
+<li>Append <code>r</code> zeros to <code>D</code> → <code>D * 2^r</code></li>
+<li>Perform modulo-2 division of <code>D * 2^r</code> by <code>G</code></li>
+<li>Remainder <code>R</code> has at most <code>r</code> bits</li>
+<li>Transmit codeword: <code>C = D || R</code></li>
+</ol>
+<h2 id="modulo-2-arithmetic-reminders">Modulo-2 arithmetic reminders</h2>
+<ul>
+<li>Addition/subtraction are XOR</li>
+<li>No carries/borrows</li>
+</ul>
+<h2 id="undetectable-error-patterns">Undetectable error patterns</h2>
+<p>An error pattern <code>E</code> is undetectable if:</p>
+<ul>
+<li><code>E</code> is divisible by <code>G</code> (i.e., <code>E mod G = 0</code>)</li>
+<li>Equivalent: if the corrupted codeword is still a multiple of <code>G</code></li>
+</ul>
+<h3 id="what-you-should-be-able-to-do">What you should be able to do</h3>
+<ul>
+<li>Encode a given dataword with a given generator polynomial.</li>
+<li>Construct (or describe) an undetectable error pattern as a multiple of <code>G</code>.</li>
+</ul>
+<hr>
+<h1 id="error-detection-internet-checksum">Error Detection: Internet Checksum</h1>
+<h2 id="internet-checksum-1-s-complement-">Internet checksum (1’s complement)</h2>
+<ul>
+<li>Split data into 16-bit words.</li>
+<li>Add words using <strong>1’s complement addition</strong>:<ul>
+<li>normal binary addition</li>
+<li>if there is an overflow carry out of MSB, wrap it around and add to LSB (“end-around carry”)</li>
+</ul>
+</li>
+<li>Final checksum = <strong>bitwise NOT</strong> of the final sum.</li>
+</ul>
+<h3 id="what-you-should-be-able-to-do">What you should be able to do</h3>
+<ul>
+<li>Perform 16-bit 1’s complement addition correctly.</li>
+<li>Handle multiple carries.</li>
+<li>Produce final complemented checksum.</li>
+</ul>
+<hr>
+<h1 id="ethernet-csma-cd-collision-timing">Ethernet (CSMA/CD): Collision + Timing</h1>
+<h2 id="ethernet-csma-cd-essentials">Ethernet CSMA/CD essentials</h2>
+<ul>
+<li><strong>Carrier Sense</strong>: listen before transmitting.</li>
+<li><strong>Multiple Access</strong>: many nodes share the medium.</li>
+<li><strong>Collision Detection</strong>: detect collision while transmitting on wired Ethernet.</li>
+</ul>
+<h2 id="collision-timing-concepts">Collision timing concepts</h2>
+<ul>
+<li>A collision must be detected while still transmitting; otherwise a sender might finish and falsely assume success.</li>
+<li>Ethernet uses:<ul>
+<li><strong>64-bit preamble</strong></li>
+<li><strong>32-bit jam sequence</strong> after collision detection (simplified in problem statements)</li>
+</ul>
+</li>
+</ul>
+<h2 id="minimum-frame-size-rationale">Minimum frame size rationale</h2>
+<ul>
+<li>Ensures transmitter is still sending when a collision from the far end can propagate back.</li>
+<li>Rough idea: minimum transmission time must be ≥ round-trip propagation time.</li>
+</ul>
+<h3 id="what-you-should-be-able-to-do">What you should be able to do</h3>
+<ul>
+<li>Convert between:<ul>
+<li>propagation time (seconds) ↔ bit times (bit durations)</li>
+</ul>
+</li>
+<li>Determine:<ul>
+<li>whether A detects collision before finishing its frame</li>
+<li>when each host finishes sending jam sequence</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h1 id="line-encoding-nrz-manchester-nrzi">Line Encoding: NRZ, Manchester, NRZI</h1>
+<h2 id="nrz-non-return-to-zero-">NRZ (Non-Return-to-Zero)</h2>
+<ul>
+<li>Given mapping: <code>1 = High</code>, <code>0 = Low</code></li>
+<li>No guaranteed transitions → poor clock recovery with long runs.</li>
+</ul>
+<h2 id="manchester">Manchester</h2>
+<ul>
+<li>Guaranteed transition in middle of every bit period.</li>
+<li>Typically:<ul>
+<li>1 and 0 differ by the direction of mid-bit transition (convention may vary).</li>
+</ul>
+</li>
+<li>Good for synchronization; costs more bandwidth.</li>
+</ul>
+<h2 id="nrzi">NRZI</h2>
+<ul>
+<li>Start at a known initial level (problem may specify start low).</li>
+<li>Common convention:<ul>
+<li><code>1</code> → transition</li>
+<li><code>0</code> → no transition</li>
+</ul>
+</li>
+</ul>
+<h3 id="what-you-should-be-able-to-do">What you should be able to do</h3>
+<ul>
+<li>Draw waveforms for a given bit pattern under each encoding scheme.</li>
+<li>Explain tradeoffs (clock recovery vs bandwidth).</li>
+</ul>
+<hr>
+<h1 id="ip-addressing-vs-mac-addressing">IP Addressing vs MAC Addressing</h1>
+<h2 id="ipv4-address-properties">IPv4 address properties</h2>
+<ul>
+<li>32-bit logical address.</li>
+<li>Hierarchical structure enables aggregation and scalable routing.</li>
+</ul>
+<h2 id="mac-address-properties">MAC address properties</h2>
+<ul>
+<li>Typically 48-bit (6-byte) link-layer address.</li>
+<li>Flat (not hierarchical) from a routing standpoint.</li>
+</ul>
+<h2 id="if-ip-used-mac-addresses-instead-conceptual-redesign-">If IP used MAC addresses instead (conceptual redesign)</h2>
+<h3 id="potential-advantage">Potential advantage</h3>
+<ul>
+<li>Unification of identity; avoid separate logical/physical identifiers in simple setups.</li>
+</ul>
+<h3 id="strong-disadvantages-high-yield-">Strong disadvantages (high-yield)</h3>
+<ul>
+<li><strong>Routing scalability collapse</strong>: flat addresses break aggregation; routing tables grow massively.</li>
+<li><strong>Mobility and topology changes</strong>: logical addressing tied to topology is valuable.</li>
+<li><strong>Administrative control</strong>: IP addressing plans support structured network management.</li>
+</ul>
+<h3 id="what-you-should-be-able-to-do">What you should be able to do</h3>
+<ul>
+<li>Argue the hierarchy/aggregation point clearly and concretely.</li>
+</ul>
+<hr>
+<h1 id="ipv4-fragmentation-and-reassembly">IPv4 Fragmentation and Reassembly</h1>
+<h2 id="why-reassembly-at-endpoints-not-routers-">Why reassembly at endpoints (not routers)?</h2>
+<p>Two strong reasons:</p>
+<ol>
+<li><strong>Performance + state</strong>: routers would need to buffer fragments, track per-datagram state, and wait for all fragments.</li>
+<li><strong>Loss handling</strong>: if any fragment is lost, reassembly fails; doing this in routers wastes resources and increases complexity.</li>
+</ol>
+<h2 id="fragmentation-rules">Fragmentation rules</h2>
+<ul>
+<li>Fragment offset is in <strong>8-byte units</strong>.</li>
+<li>Each fragment carries its own IP header.</li>
+<li>Total length fields and offsets must be consistent.</li>
+</ul>
+<h2 id="mss-relationship">MSS relationship</h2>
+<ul>
+<li>Often used in TCP questions:<ul>
+<li><code>MSS = MTU - IP_header - TCP_header</code></li>
+</ul>
+</li>
+<li>Application data passed to TCP may become multiple TCP segments, then possibly fragmented by IP on smaller-MTU links.</li>
+</ul>
+<h3 id="what-you-should-be-able-to-do">What you should be able to do</h3>
+<ul>
+<li>Given MTUs on links, sketch packets per link:<ul>
+<li>size of each IP fragment</li>
+<li>offsets</li>
+<li>header overhead</li>
+</ul>
+</li>
+<li>Compute how many total bits are delivered to the network layer at the destination.</li>
+</ul>
+<hr>
+<h1 id="ip-vs-mac-when-moving-networks">IP vs MAC When Moving Networks</h1>
+<h2 id="mac-address">MAC address</h2>
+<ul>
+<li>Usually does <strong>not</strong> change when moving between departments (it is tied to the NIC).</li>
+<li>Exceptions exist (virtual NICs, replacement hardware), but standard assumption: MAC remains fixed.</li>
+</ul>
+<h2 id="ip-address">IP address</h2>
+<ul>
+<li>Often <strong>must change</strong> if you move to a different subnet/VLAN, because IP is tied to topology and routing domains.</li>
+<li>If the new department is within the same IP subnet and configuration, it might not change—but typical exam assumption: different department → different subnet → IP changes.</li>
+</ul>
+<h3 id="what-you-should-be-able-to-do">What you should be able to do</h3>
+<ul>
+<li>State assumptions explicitly:<ul>
+<li>Are departments different subnets?</li>
+<li>Is DHCP used?</li>
+<li>Is L2 extended across departments?</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h1 id="subnetting-essentials">Subnetting Essentials</h1>
+<h2 id="key-definitions">Key definitions</h2>
+<ul>
+<li><strong>Subnet mask</strong> splits IP into:<ul>
+<li>network/subnet portion</li>
+<li>host portion</li>
+</ul>
+</li>
+<li><strong>Subnet number</strong>: IP AND subnet mask</li>
+<li><strong>CIDR notation</strong>: <code>/n</code> indicates the number of leading 1s in the subnet mask.</li>
+</ul>
+<h2 id="skills">Skills</h2>
+<ul>
+<li>Convert between:<ul>
+<li>dotted decimal mask (e.g., 255.255.255.128) and <code>/n</code> (e.g., /25)</li>
+</ul>
+</li>
+<li>Determine:<ul>
+<li>which subnet an IP belongs to</li>
+<li>routing table entries per subnet</li>
+</ul>
+</li>
+</ul>
+<h3 id="common-masks-memorize-">Common masks (memorize)</h3>
+<ul>
+<li>/24 = 255.255.255.0</li>
+<li>/25 = 255.255.255.128</li>
+<li>/23 = 255.255.254.0</li>
+</ul>
+<hr>
+<h1 id="routing-with-subnets-longest-prefix-match">Routing with Subnets + Longest Prefix Match</h1>
+<h2 id="longest-prefix-match">Longest Prefix Match</h2>
+<ul>
+<li>When multiple entries match a destination, pick the entry with the <strong>most specific</strong> prefix (largest <code>/n</code>).</li>
+</ul>
+<h2 id="default-route">Default route</h2>
+<ul>
+<li>Used when no more-specific entry matches.</li>
+<li>Written as <code>&lt;default&gt;</code> or <code>0.0.0.0/0</code>.</li>
+</ul>
+<h3 id="what-you-should-be-able-to-do">What you should be able to do</h3>
+<ul>
+<li>Given a routing table with multiple subnets:<ul>
+<li>determine which interface/next-hop is used for each destination</li>
+</ul>
+</li>
+<li>Explain why a more-specific subnet entry overrides a broader one.</li>
+</ul>
+<hr>
+<h1 id="link-state-routing-dijkstra-">Link-State Routing (Dijkstra)</h1>
+<h2 id="conceptual-steps">Conceptual steps</h2>
+<ol>
+<li>Each node learns the full topology (link states + costs).</li>
+<li>Run Dijkstra from the source node:<ul>
+<li>Maintain:<ul>
+<li>confirmed set (shortest path finalized)</li>
+<li>tentative distances for others</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>Produce:<ul>
+<li>shortest-path tree</li>
+<li>next-hop routing table</li>
+</ul>
+</li>
+</ol>
+<h2 id="what-you-should-be-able-to-do">What you should be able to do</h2>
+<ul>
+<li>Perform Dijkstra step-by-step.</li>
+<li>Track:<ul>
+<li>current minimum tentative node</li>
+<li>updated tentative costs</li>
+<li>predecessor pointers</li>
+</ul>
+</li>
+<li>Derive next-hop decisions from the shortest paths.</li>
+</ul>
+<hr>
+<h1 id="distance-vector-routing-bellman-ford-">Distance Vector Routing (Bellman-Ford)</h1>
+<h2 id="core-update-equation">Core update equation</h2>
+<p>For node <code>x</code> computing distance to destination <code>y</code>:</p>
+<ul>
+<li><code>D_x(y) = min over neighbors v { c(x,v) + D_v(y) }</code></li>
+</ul>
+<h2 id="convergence-concept">Convergence concept</h2>
+<ul>
+<li>Nodes repeatedly exchange vectors with neighbors until stable.</li>
+</ul>
+<h2 id="typical-exam-tasks">Typical exam tasks</h2>
+<ul>
+<li>Given a topology and link costs:<ul>
+<li>compute final distances from a node <code>X</code> to all nodes</li>
+<li>sometimes identify next-hop choices (via which neighbor gives min)</li>
+</ul>
+</li>
+</ul>
+<h2 id="failure-modes-to-avoid">Failure modes to avoid</h2>
+<ul>
+<li>Mixing up <em>cost to neighbor</em> and <em>neighbor’s distance to destination</em></li>
+<li>Forgetting to recompute minima after updates</li>
+</ul>
+<hr>
+<h1 id="quick-concept-questions">Quick Concept Questions</h1>
+<h2 id="why-csma-cd-cannot-be-used-in-wireless">Why CSMA/CD cannot be used in wireless</h2>
+<ul>
+<li>A wireless sender typically cannot reliably detect a collision while transmitting:<ul>
+<li>self-interference dominates</li>
+<li>hidden terminal problem: collisions happen at receiver without sender awareness</li>
+</ul>
+</li>
+</ul>
+<h2 id="drawback-of-virtual-circuit-based-forwarding">Drawback of virtual-circuit-based forwarding</h2>
+<ul>
+<li>Requires per-flow state in network.</li>
+<li>Setup overhead and management complexity.</li>
+<li>Failures require teardown/rebuild; less flexible than datagrams.</li>
+</ul>
+<h2 id="why-ethernet-uses-binary-exponential-backoff">Why Ethernet uses binary exponential backoff</h2>
+<ul>
+<li>Reduces probability of repeated collisions under high contention by expanding the random wait window after each collision.</li>
+<li>Stabilizes throughput as load increases.</li>
+</ul>
+<h2 id="why-ethernet-has-a-minimum-packet-size">Why Ethernet has a minimum packet size</h2>
+<ul>
+<li>Ensures collision detection is possible: transmitter must still be sending when the collision signal can propagate back from the far end of the network.</li>
+</ul>
+<hr>
+<h1 id="high-yield-computational-skills-checklist">High-Yield Computational Skills Checklist</h1>
+<p>Use this as a final exam-prep checklist.</p>
+<h2 id="timing-delay">Timing / Delay</h2>
+<ul>
+<li>[ ] Compute <code>p/s</code> and interpret it as seconds.</li>
+<li>[ ] Add propagation delays per hop.</li>
+<li>[ ] Track last-bit arrival times with store-and-forward.</li>
+<li>[ ] Identify bottleneck link effects on spacing of packets.</li>
+</ul>
+<h2 id="rdt">RDT</h2>
+<ul>
+<li>[ ] Apply SR constraint <code>N &gt;= 2W</code> (sequence space vs window).</li>
+<li>[ ] Reason about GBN sender window contents given receiver expectation.</li>
+<li>[ ] Determine possible ACK values in flight under no-reordering assumption.</li>
+</ul>
+<h2 id="error-detection">Error Detection</h2>
+<ul>
+<li>[ ] Perform XOR long division for CRC correctly.</li>
+<li>[ ] Explain undetectable error patterns as multiples of generator polynomial.</li>
+<li>[ ] Compute 1’s complement checksum with end-around carry.</li>
+</ul>
+<h2 id="ethernet-mac">Ethernet / MAC</h2>
+<ul>
+<li>[ ] Convert microseconds ↔ bit times given link rate.</li>
+<li>[ ] Determine collision detection timing feasibility.</li>
+<li>[ ] Reason about jam/preamble rules in the given simplified model.</li>
+<li>[ ] Justify minimum frame size and backoff.</li>
+</ul>
+<h2 id="encoding">Encoding</h2>
+<ul>
+<li>[ ] Draw NRZ waveform.</li>
+<li>[ ] Draw Manchester waveform with mid-bit transitions.</li>
+<li>[ ] Draw NRZI waveform given start level and transition rule.</li>
+</ul>
+<h2 id="ip-subnets-routing">IP / Subnets / Routing</h2>
+<ul>
+<li>[ ] Compute subnet number from IP and mask.</li>
+<li>[ ] Convert between <code>/n</code> and dotted decimal masks for common cases.</li>
+<li>[ ] Apply longest prefix match and default route logic.</li>
+<li>[ ] Compute fragmentation sizes/offsets along links with different MTUs.</li>
+</ul>
+<h2 id="routing-algorithms">Routing Algorithms</h2>
+<ul>
+<li>[ ] Run Dijkstra stepwise and produce next-hop table.</li>
+<li>[ ] Compute converged distance vector values from a given source.</li>
+</ul>
+<hr>
