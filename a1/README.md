@@ -85,7 +85,7 @@ array. This also makes synchronization easier.
 
 The port table manages a fixed numbers of ports, each port can contain a `Link`.
 
-For now we just made all mutatable functions synchronized. For better performance, we may read a read write lock in the
+For now we just made all mutable functions synchronized. For better performance, we may read a read write lock in the
 future to save time on read operations.
 
 ### Link
@@ -109,9 +109,8 @@ We also made some assupmptions on the behaviour of the application for edge case
    router makes a y/n choice.
 2. We assume that all routers will use our implementation, i.e. the packet will always follow the SOSPFPacket protocol
    implemented in this repo
-3. We did not implement much handling for connection issues, if a router goes down (socket closed), for now the
-   application just prints
-   it out.
+3. We did not implement much handling for connection issues, since it wasn't specified the protocol for it right now. If an
+   attached router goes down (socket closed), for now the application just prints the error (EOFexception) out.
 
 ## Project Structure
 
