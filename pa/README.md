@@ -4,7 +4,7 @@
 
 To compile and run this project, you need:
 
-- **Java**: Version 8 or higher (JDK 8+)
+- **Java**: Version 22 or higher (JDK 22+)
 - **Maven**: Version 3.0 or higher
 
 ### Checking Your Versions
@@ -109,7 +109,8 @@ We also made some assupmptions on the behaviour of the application for edge case
    router makes a y/n choice.
 2. We assume that all routers will use our implementation, i.e. the packet will always follow the SOSPFPacket protocol
    implemented in this repo
-3. We did not implement much handling for connection issues, since it wasn't specified the protocol for it right now. If an
+3. We did not implement much handling for connection issues, since it wasn't specified the protocol for it right now. If
+   an
    attached router goes down (socket closed), for now the application just prints the error (EOFexception) out.
 
 ## Project Structure
