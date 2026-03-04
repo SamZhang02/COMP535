@@ -14,7 +14,9 @@ import socs.network.util.Configuration;
 
 import java.io.IOException;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 public class Router {
@@ -400,11 +402,50 @@ public class Router {
         synchronizeAndBroadcastLsd();
       }
     }
+
+    boolean isLSAUpdate = packet.sospfType == SOSPFPacket.SOSPFType.LINKSTATE_UPDATE;
+    if (isLSAUpdate && packet.lsaArray != null && !packet.lsaArray.isEmpty()) {
+      List<LSA> newlyAcceptedLSA = new ArrayList<>();
+
+      // Update existing LSAs
+      packet.lsaArray.stream()
+              .filter(lsa -> !Objects.equals(lsa.linkStateID, rd.simulatedIPAddress)) // Do not update my own LSA
+              .forEach(lsa -> {
+                Optional<LSA> existingLSA = this.lsd.getLSA(lsa.linkStateID);
+                if (existingLSA.isEmpty() || lsa.getSeqNumber() > existingLSA.get().getSeqNumber()) {
+                  LSA storedCopy = LSA.copyOf(lsa);
+                  this.lsd.addLSA(storedCopy.linkStateID, storedCopy);
+                  newlyAcceptedLSA.add(LSA.copyOf(storedCopy));
+                }
+              });
+
+      // Propagate new LSAs for neighbous
+      if (!newlyAcceptedLSA.isEmpty()) {
+        this.portsTable.getTwoWays()
+                .stream()
+                .filter(link -> !Objects.equals(link.otherRouter.simulatedIPAddress, packet.srcIP))
+                .forEach(link -> {
+                  SOSPFPacket msg = SOSPFMessageFactory.createLSAUPDATE(
+                          rd,
+                          link.otherRouter.simulatedIPAddress,
+                          newlyAcceptedLSA
+                  );
+
+                  LinkChannel neighbour_ch = link.channel;
+                  try {
+                    neighbour_ch.send(msg);
+                  } catch (IOException e) {
+                    console.log("Could not send LSAUpdate to " + link.otherRouter.simulatedIPAddress);
+                  }
+                });
+
+      }
+    }
   }
 
   /**
    * It can happen that our LSA and actually connected links are out of things like disconnection.
-   * Update LSA states to the current links states.
+   * Update this router's LSA states to the current links states.
    */
   private synchronized void synchronizeAndBroadcastLsd() {
     LSA myLSA = lsd.getMyLSA();

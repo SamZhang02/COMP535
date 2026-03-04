@@ -7,14 +7,27 @@ import java.util.List;
 // Link State Advertisement
 public class LSA implements Serializable {
 
-  //IP address of the router originate this LSA
+  /**
+   * IP address of the router originate this LSA
+   */
   public String linkStateID;
+
+  /**
+   * Version number
+   */
   private int lsaSeqNumber = Integer.MIN_VALUE;
 
+  /**
+   * Description of Neighbours
+   */
   private List<LinkDescription> links = new ArrayList<>();
 
   public int getSeqNumber() {
     return this.lsaSeqNumber;
+  }
+
+  public void setSeqNumber(int seqNumber) {
+    this.lsaSeqNumber = seqNumber;
   }
 
   public int bumpSeqNumber() {
@@ -38,6 +51,15 @@ public class LSA implements Serializable {
 
   public List<LinkDescription> getLinks() {
     return this.links;
+  }
+
+  public static LSA copyOf(LSA source) {
+    LSA copy = new LSA();
+    copy.linkStateID = source.linkStateID;
+    copy.setSeqNumber(source.getSeqNumber());
+    copy.clearLinks();
+    copy.addLinks(source.getLinks().stream().map(LinkDescription::copyOf).toList());
+    return copy;
   }
 
   @Override

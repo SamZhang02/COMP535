@@ -6,6 +6,7 @@ import socs.network.message.LinkDescription;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 public class LinkStateDatabase {
 
@@ -36,19 +37,23 @@ public class LinkStateDatabase {
     return null;
   }
 
-  public LSA getMyLSA() {
+  synchronized public LSA getMyLSA() {
     return this._store.get(rd.simulatedIPAddress);
   }
 
-  public void addLSA(String id, LSA lsa) {
+  synchronized public void addLSA(String id, LSA lsa) {
     this._store.put(id, lsa);
   }
 
-  public LSA removeLSA(String id) {
+  synchronized public LSA removeLSA(String id) {
     return this._store.remove(id);
   }
 
-  public List<LSA> getSnapshot() {
+  synchronized public Optional<LSA> getLSA(String id) {
+    return Optional.ofNullable(this._store.get(id));
+  }
+
+  synchronized public List<LSA> getSnapshot() {
     return this._store.values().stream().toList();
   }
 
