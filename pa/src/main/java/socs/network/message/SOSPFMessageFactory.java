@@ -28,9 +28,22 @@ public class SOSPFMessageFactory {
   }
 
   public static SOSPFPacket createLSAUPDATE(RouterDescription srcRd, String dstSimulatedIp, List<LSA> lsa) {
-    return basePacket(srcRd, dstSimulatedIp).setSospfType(SOSPFPacket.SOSPFType.LINKSTATE_UPDATE)
+    return basePacket(srcRd, dstSimulatedIp)
+            .setSospfType(SOSPFPacket.SOSPFType.LINKSTATE_UPDATE)
             .setLsaArray(lsa)
             .createSOSPFPacket();
+  }
+
+  public static SOSPFPacket createMessagee(
+          RouterDescription srcRd,
+          String dstSimulatedIp,
+          String message
+  ) {
+    return basePacket(srcRd, dstSimulatedIp)
+            .setSospfType(SOSPFPacket.SOSPFType.APPLICATION_MSG)
+            .setMessage(message)
+            .createSOSPFPacket();
+
   }
 
   private static SOSPFPacketBuilder basePacket(RouterDescription rd, String dstIP) {
@@ -43,4 +56,3 @@ public class SOSPFMessageFactory {
   }
 
 }
-

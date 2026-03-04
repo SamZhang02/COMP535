@@ -1,7 +1,7 @@
 package socs.network.message;
 
-import java.io.*;
-import java.util.List;import java.util.Vector;
+import java.io.Serializable;
+import java.util.List;
 
 public class SOSPFPacket implements Serializable {
   public String requestId;

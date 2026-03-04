@@ -1,7 +1,6 @@
 package socs.network.message;
 
 import java.util.List;
-import java.util.Vector;
 
 public class SOSPFPacketBuilder {
   private String requestId;

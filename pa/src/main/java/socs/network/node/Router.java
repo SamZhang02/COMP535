@@ -73,7 +73,13 @@ public class Router {
    * @param destinationIP the ip adderss of the destination simulated router
    */
   public void processDetect(String destinationIP) {
-
+    List<String> path = lsd.getShortestPath(destinationIP);
+    if (path != null) {
+      String pathString = String.join(" -> ", path);
+      console.log("Path found: " + pathString);
+    } else {
+      console.log("Path not found");
+    }
   }
 
   /**
@@ -234,8 +240,30 @@ public class Router {
    * @param destinationIP the simulated IP address of the destination router
    * @param message       the message content to send
    */
-  public void processSend(String destinationIP, String message) {
+  public void processSend(String destinationIP, String message) throws IOException {
+    if (destinationIP.equals(rd.simulatedIPAddress)) {
+      console.log("Cannot send to yourself.");
+      return;
+    }
 
+    List<String> path = lsd.getShortestPath(destinationIP);
+    if (path == null) {
+      console.log("Path not found");
+      return;
+    }
+
+    path.removeFirst();
+
+    String nextHop = path.getFirst();
+    SOSPFPacket msg = SOSPFMessageFactory.createMessagee(rd, destinationIP, message);
+
+    Optional<Link> nextHopOpt = this.portsTable.get(nextHop);
+    if (nextHopOpt.isEmpty()) {
+      console.log("Path not found");
+      return;
+    }
+
+    nextHopOpt.get().channel.send(msg);
   }
 
   /**
@@ -254,7 +282,31 @@ public class Router {
    * @param packet the received application message packet
    */
   private void handleApplicationMessage(SOSPFPacket packet) {
+    if (Objects.equals(packet.dstIP, rd.simulatedIPAddress)) {
+      console.log("Received message from " + packet.srcIP + ":");
+      console.log(packet.message);
+      return;
+    }
 
+    List<String> path = lsd.getShortestPath(packet.dstIP);
+    if (path == null || path.size() < 2) {
+      console.log("Path not found");
+      return;
+    }
+
+    String nextHop = path.get(1);
+    Optional<Link> nextHopOpt = this.portsTable.get(nextHop);
+    if (nextHopOpt.isEmpty()) {
+      console.log("Path not found");
+      return;
+    }
+
+    console.log("Forwarding packet from " + packet.srcIP + " to " + packet.dstIP);
+    try {
+      nextHopOpt.get().channel.send(packet);
+    } catch (IOException e) {
+      console.log("Failed to forward packet to " + nextHop);
+    }
   }
 
   /**
@@ -360,6 +412,12 @@ public class Router {
       return;
     }
 
+    boolean isApplicationMessage = packet.sospfType == SOSPFPacket.SOSPFType.APPLICATION_MSG;
+    if (isApplicationMessage) {
+      handleApplicationMessage(packet);
+      return;
+    }
+
     boolean isDBSyncHELLO = packet.sospfType == SOSPFPacket.SOSPFType.HELLO;
     if (isDBSyncHELLO) {
       String otherRouterIP = packet.srcIP;
@@ -419,8 +477,6 @@ public class Router {
                 }
               });
 
-      console.log("LSD State:" + this.lsd.toString());
-
       // Propagate new LSAs for neighbous
       if (!newlyAcceptedLSA.isEmpty()) {
         this.portsTable.getTwoWays()
@@ -443,6 +499,7 @@ public class Router {
 
       }
     }
+
   }
 
   /**
