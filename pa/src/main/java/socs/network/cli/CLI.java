@@ -130,6 +130,13 @@ public class CLI {
     } catch (NumberFormatException e) {
       console.log("Invalid number in command");
       return true;
+    } catch (Exception e) {
+      String message = e.getMessage();
+      if (message == null || message.isBlank()) {
+        message = e.getClass().getSimpleName();
+      }
+      console.log("Command failed: " + message);
+      return true;
     }
   }
 

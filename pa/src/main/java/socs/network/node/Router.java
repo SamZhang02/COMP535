@@ -1,6 +1,7 @@
 package socs.network.node;
 
 import socs.network.cli.Console;
+import socs.network.message.LSA;
 import socs.network.message.LinkDescription;
 import socs.network.message.SOSPFMessageFactory;
 import socs.network.message.SOSPFPacket;
@@ -155,11 +156,36 @@ public class Router {
               }
             });
 
-    // LSUPDATE
+    // Populate my lsa
+    LSA myLSA = lsd.getMyLSA();
 
-    portsTable.getAllLinks().stream().forEach(link -> {
-      LinkDescription ld = LinkDescription.fromLink(link);
-    });
+    List<LinkDescription> newLinks = this.portsTable
+            .getTwoWays()
+            .stream()
+            .map(LinkDescription::fromLink)
+            .toList();
+
+    if (!newLinks.equals(myLSA.getLinks())) {
+      myLSA.setLinks(newLinks);
+      myLSA.bumpSeqNumber();
+    }
+
+    // LSAUPDATE to neighbours
+    portsTable.getTwoWays().forEach(
+            link -> {
+              SOSPFPacket msg = SOSPFMessageFactory.createLSAUPDATE(
+                      rd,
+                      link.otherRouter.simulatedIPAddress,
+                      lsd.getSnapshot()
+              );
+
+              try {
+                link.channel.send(msg);
+              } catch (IOException e) {
+                throw new RuntimeException(e);
+              }
+            }
+    );
   }
 
   /**

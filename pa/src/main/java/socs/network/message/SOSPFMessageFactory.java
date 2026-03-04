@@ -2,6 +2,7 @@ package socs.network.message;
 
 import socs.network.node.RouterDescription;
 
+import java.util.List;
 import java.util.UUID;
 
 public class SOSPFMessageFactory {
@@ -23,6 +24,12 @@ public class SOSPFMessageFactory {
     return basePacket(srcRd, dstSimulatedIp)
             .setSospfType(SOSPFPacket.SOSPFType.HELLO)
             .setAccepted(accepted)
+            .createSOSPFPacket();
+  }
+
+  public static SOSPFPacket createLSAUPDATE(RouterDescription srcRd, String dstSimulatedIp, List<LSA> lsa) {
+    return basePacket(srcRd, dstSimulatedIp).setSospfType(SOSPFPacket.SOSPFType.LINKSTATE_UPDATE)
+            .setLsaArray(lsa)
             .createSOSPFPacket();
   }
 

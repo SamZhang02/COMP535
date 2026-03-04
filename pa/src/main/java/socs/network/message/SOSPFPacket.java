@@ -1,7 +1,7 @@
 package socs.network.message;
 
 import java.io.*;
-import java.util.Vector;
+import java.util.List;import java.util.Vector;
 
 public class SOSPFPacket implements Serializable {
   public String requestId;
@@ -27,7 +27,7 @@ public class SOSPFPacket implements Serializable {
   public String neighborID; //neighbor's simulated IP address
 
   //used by LSAUPDATE
-  public Vector<LSA> lsaArray = null;
+  public List<LSA> lsaArray = null;
 
   //used by Application Message
   public String message; //user inputted message payload
@@ -42,7 +42,7 @@ public class SOSPFPacket implements Serializable {
           String routerID,
           Boolean accepted,
           String neighborID,
-          Vector<LSA> lsaArray,
+          List<LSA> lsaArray,
           String message
   ) {
     this.requestId = requestId;

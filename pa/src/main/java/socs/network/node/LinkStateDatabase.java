@@ -4,12 +4,13 @@ import socs.network.message.LSA;
 import socs.network.message.LinkDescription;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class LinkStateDatabase {
 
   //linkID => LSAInstance
-  Map<String, LSA> _store = new HashMap<String, LSA>();
+  private Map<String, LSA> _store = new HashMap<String, LSA>();
 
   private RouterDescription rd = null;
 
@@ -35,16 +36,34 @@ public class LinkStateDatabase {
     return null;
   }
 
+  public LSA getMyLSA() {
+    return this._store.get(rd.simulatedIPAddress);
+  }
+
+  public void addLSA(String id, LSA lsa) {
+    this._store.put(id, lsa);
+  }
+
+  public LSA removeLSA(String id) {
+    return this._store.remove(id);
+  }
+
+  public List<LSA> getSnapshot() {
+    return this._store.values().stream().toList();
+  }
+
   //initialize the linkstate database by adding an entry about the router itself
   private LSA initLinkStateDatabase() {
     LSA lsa = new LSA();
     lsa.linkStateID = rd.simulatedIPAddress;
-    lsa.lsaSeqNumber = Integer.MIN_VALUE;
+
+    // ld w myself
     LinkDescription ld = new LinkDescription();
     ld.linkID = rd.simulatedIPAddress;
     ld.tosMetrics = 0;
     ld.weight = 0; //self-link has weight 0
-    lsa.links.add(ld);
+    lsa.addLink(ld);
+
     return lsa;
   }
 
@@ -52,8 +71,8 @@ public class LinkStateDatabase {
   public String toString() {
     StringBuilder sb = new StringBuilder();
     for (LSA lsa : _store.values()) {
-      sb.append(lsa.linkStateID).append("(" + lsa.lsaSeqNumber + ")").append(":\t");
-      for (LinkDescription ld : lsa.links) {
+      sb.append(lsa.linkStateID).append("(" + lsa.getSeqNumber() + ")").append(":\t");
+      for (LinkDescription ld : lsa.getLinks()) {
         sb.append(ld.linkID).append(",").append(ld).append(",").
                 append(ld.weight).append("\t");
       }
