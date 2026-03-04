@@ -89,7 +89,7 @@ public class Router {
   /**
    * attach the link to the remote router, which is identified by the given simulated ip;
    * to establish the connection via socket, you need to indentify the process IP and process Port;
-   * additionally, weight is the cost to transmitting data through the link
+   * additionally, cost is the cost to transmitting data through the link
    * <p/>
    * NOTE: this command should not trigger link database synchronization
    */
@@ -166,7 +166,7 @@ public class Router {
   /**
    * attach the link to the remote router, which is identified by the given simulated ip;
    * to establish the connection via socket, you need to indentify the process IP and process Port;
-   * additionally, weight is the cost to transmitting data through the link
+   * additionally, cost is the cost to transmitting data through the link
    * <p/>
    * This command does trigger the link database synchronization
    */
@@ -195,7 +195,7 @@ public class Router {
   }
 
   /**
-   * update the weight of an attached link
+   * update the cost of an attached link
    */
   public void updateWeight(
           String processIP, short processPort,
@@ -205,12 +205,12 @@ public class Router {
   }
 
   /**
-   * update the weight of a specific port.
+   * update the cost of a specific port.
    * This change should trigger synchronization of the Link State Database by sending
    * a Link State Advertisement (LSA) update to all neighboring routers in the topology.
    *
    * @param portNumber the port number (0-3) to update
-   * @param newWeight  the new weight/cost for the link attached to this port
+   * @param newWeight  the new cost/cost for the link attached to this port
    */
   public void processUpdate(short portNumber, short newWeight) {
 
@@ -419,6 +419,8 @@ public class Router {
                 }
               });
 
+      console.log("LSD State:" + this.lsd.toString());
+
       // Propagate new LSAs for neighbous
       if (!newlyAcceptedLSA.isEmpty()) {
         this.portsTable.getTwoWays()
@@ -483,7 +485,18 @@ public class Router {
     });
   }
 
+
+  /**
+   * Helper command for debugging. Shows the state of the ports table.
+   */
   public void processPort() {
     console.log(this.portsTable.toString());
+  }
+
+  /**
+   * Helper command for debugging. Shows the state of the LSD.
+   */
+  public void processLsd() {
+    console.log(this.lsd.toString());
   }
 }

@@ -75,7 +75,7 @@ public class Link {
     return "Link{" +
             "ourRouter=" + ourRouter.toString() +
             ", otherRouter=" + otherRouter.toString() +
-            ", weight=" + weight +
+            ", cost=" + weight +
             '}';
   }
 }

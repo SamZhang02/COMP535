@@ -123,6 +123,13 @@ public class CLI {
           }
           router.processPort();
           return true;
+        case "lsd":
+          if (parts.length != 1) {
+            console.log("Usage: lsd");
+            return true;
+          }
+          router.processLsd();
+          return true;
         default:
           console.log("Invalid command");
           return true;
