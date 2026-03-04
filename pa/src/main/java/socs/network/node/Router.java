@@ -1,6 +1,7 @@
 package socs.network.node;
 
 import socs.network.cli.Console;
+import socs.network.message.LinkDescription;
 import socs.network.message.SOSPFMessageFactory;
 import socs.network.message.SOSPFPacket;
 import socs.network.node.ports.PortsTable;
@@ -139,6 +140,7 @@ public class Router {
    * broadcast Hello to neighbors
    */
   public void processStart() {
+    // HELLO all links
     portsTable.getAllLinks()
             .stream()
             .filter(link -> link.otherRouter.status == null)
@@ -152,6 +154,12 @@ public class Router {
                 e.printStackTrace();
               }
             });
+
+    // LSUPDATE
+
+    portsTable.getAllLinks().stream().forEach(link -> {
+      LinkDescription ld = LinkDescription.fromLink(link);
+    });
   }
 
   /**

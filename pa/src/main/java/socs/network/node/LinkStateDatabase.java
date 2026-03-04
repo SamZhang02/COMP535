@@ -4,11 +4,12 @@ import socs.network.message.LSA;
 import socs.network.message.LinkDescription;
 
 import java.util.HashMap;
+import java.util.Map;
 
 public class LinkStateDatabase {
 
   //linkID => LSAInstance
-  HashMap<String, LSA> _store = new HashMap<String, LSA>();
+  Map<String, LSA> _store = new HashMap<String, LSA>();
 
   private RouterDescription rd = null;
 
@@ -41,7 +42,6 @@ public class LinkStateDatabase {
     lsa.lsaSeqNumber = Integer.MIN_VALUE;
     LinkDescription ld = new LinkDescription();
     ld.linkID = rd.simulatedIPAddress;
-    ld.portNum = -1;
     ld.tosMetrics = 0;
     ld.weight = 0; //self-link has weight 0
     lsa.links.add(ld);
@@ -51,10 +51,10 @@ public class LinkStateDatabase {
 
   public String toString() {
     StringBuilder sb = new StringBuilder();
-    for (LSA lsa: _store.values()) {
+    for (LSA lsa : _store.values()) {
       sb.append(lsa.linkStateID).append("(" + lsa.lsaSeqNumber + ")").append(":\t");
       for (LinkDescription ld : lsa.links) {
-        sb.append(ld.linkID).append(",").append(ld.portNum).append(",").
+        sb.append(ld.linkID).append(",").append(ld).append(",").
                 append(ld.weight).append("\t");
       }
       sb.append("\n");
