@@ -283,8 +283,8 @@ public class Router {
    */
   private void handleApplicationMessage(SOSPFPacket packet) {
     if (Objects.equals(packet.dstIP, rd.simulatedIPAddress)) {
-      console.log("Received message from " + packet.srcIP + ":");
-      console.log(packet.message);
+      console.log("Received message from " + packet.srcIP + ";");
+      console.log("Message: " + packet.message);
       return;
     }
 
@@ -401,105 +401,115 @@ public class Router {
 
     console.log("Received " + packet.displayString() + " FROM " + packet.srcIP + ";");
 
-    boolean isAttachRequestResponse = packet.sospfType == SOSPFPacket.SOSPFType.HELLO && packet.accepted != null;
-    if (isAttachRequestResponse) {
-      if (packet.accepted) {
-        console.log("Attach accepted by " + packet.srcIP + ";");
-      } else {
-        console.log("Attach rejected by " + packet.srcIP + ";");
-      }
-
+    if (isAttachRequestResponse(packet) && handleAttachRequestResponse(packet)) {
       return;
     }
 
-    boolean isApplicationMessage = packet.sospfType == SOSPFPacket.SOSPFType.APPLICATION_MSG;
-    if (isApplicationMessage) {
-      handleApplicationMessage(packet);
+    switch (packet.sospfType) {
+      case APPLICATION_MSG -> handleApplicationMessage(packet);
+      case HELLO -> handleDatabaseSyncHello(packet, ch);
+      case LINKSTATE_UPDATE -> handleLinkStateUpdate(packet);
+      default -> {
+      }
+    }
+  }
+
+  private boolean isAttachRequestResponse(SOSPFPacket packet) {
+    return packet.sospfType == SOSPFPacket.SOSPFType.HELLO && packet.accepted != null;
+  }
+
+  private boolean handleAttachRequestResponse(SOSPFPacket packet) {
+    if (packet.accepted) {
+      console.log("Attach accepted by " + packet.srcIP + ";");
+    } else {
+      console.log("Attach rejected by " + packet.srcIP + ";");
+    }
+    return true;
+  }
+
+  private void handleDatabaseSyncHello(SOSPFPacket packet, LinkChannel ch) {
+    String otherRouterIP = packet.srcIP;
+    Optional<Link> linkOpt = portsTable.get(otherRouterIP);
+
+    if (linkOpt.isEmpty()) {
+      // Not a neighbour, should not really end up in this state, for now just ignore the packet
       return;
     }
 
-    boolean isDBSyncHELLO = packet.sospfType == SOSPFPacket.SOSPFType.HELLO;
-    if (isDBSyncHELLO) {
-      String otherRouterIP = packet.srcIP;
-      Optional<Link> linkOpt = portsTable.get(otherRouterIP);
+    Link link = linkOpt.get();
+    RouterStatus status = link.otherRouter.status;
+    boolean shouldReplyHello = false;
+    boolean becameTwoWay = false;
 
-      if (linkOpt.isEmpty()) {
-        // Not a neighbour, should not really end up in this state, for now just ignore the packet
-        return;
-      }
-
-      Link link = linkOpt.get();
-      RouterStatus status = link.otherRouter.status;
-      boolean shouldReplyHello = false;
-      boolean becameTwoWay = false;
-
-      if (status == null) {
-        link.otherRouter.status = RouterStatus.INIT;
+    if (status == null) {
+      link.otherRouter.status = RouterStatus.INIT;
+      shouldReplyHello = true;
+    } else if (status == RouterStatus.INIT) {
+      link.otherRouter.status = RouterStatus.TWO_WAY;
+      becameTwoWay = true;
+      if (link.helloInitiatedByMe) {
         shouldReplyHello = true;
-      } else if (status == RouterStatus.INIT) {
-        link.otherRouter.status = RouterStatus.TWO_WAY;
-        becameTwoWay = true;
-        if (link.helloInitiatedByMe) {
-          shouldReplyHello = true;
-          link.helloInitiatedByMe = false;
-        }
-      } else if (status == RouterStatus.TWO_WAY) {
-        return;
+        link.helloInitiatedByMe = false;
       }
+    } else if (status == RouterStatus.TWO_WAY) {
+      return;
+    }
 
-      console.log("set " + otherRouterIP + " STATE to " + link.otherRouter.status + ";");
-      if (shouldReplyHello) {
-        try {
-          ch.send(SOSPFMessageFactory.createHello(this.rd, otherRouterIP));
-        } catch (IOException e) {
-          throw new RuntimeException(e);
-        }
-      }
-
-      if (becameTwoWay) {
-        synchronizeAndBroadcastLsd();
+    console.log("set " + otherRouterIP + " STATE to " + link.otherRouter.status + ";");
+    if (shouldReplyHello) {
+      try {
+        ch.send(SOSPFMessageFactory.createHello(this.rd, otherRouterIP));
+      } catch (IOException e) {
+        throw new RuntimeException(e);
       }
     }
 
-    boolean isLSAUpdate = packet.sospfType == SOSPFPacket.SOSPFType.LINKSTATE_UPDATE;
-    if (isLSAUpdate && packet.lsaArray != null && !packet.lsaArray.isEmpty()) {
-      List<LSA> newlyAcceptedLSA = new ArrayList<>();
+    if (becameTwoWay) {
+      synchronizeAndBroadcastLsd();
+    }
+  }
 
-      // Update existing LSAs
-      packet.lsaArray.stream()
-              .filter(lsa -> !Objects.equals(lsa.linkStateID, rd.simulatedIPAddress)) // Do not update my own LSA
-              .forEach(lsa -> {
-                Optional<LSA> existingLSA = this.lsd.getLSA(lsa.linkStateID);
-                if (existingLSA.isEmpty() || lsa.getSeqNumber() > existingLSA.get().getSeqNumber()) {
-                  LSA storedCopy = LSA.copyOf(lsa);
-                  this.lsd.addLSA(storedCopy.linkStateID, storedCopy);
-                  newlyAcceptedLSA.add(LSA.copyOf(storedCopy));
-                }
-              });
-
-      // Propagate new LSAs for neighbous
-      if (!newlyAcceptedLSA.isEmpty()) {
-        this.portsTable.getTwoWays()
-                .stream()
-                .filter(link -> !Objects.equals(link.otherRouter.simulatedIPAddress, packet.srcIP))
-                .forEach(link -> {
-                  SOSPFPacket msg = SOSPFMessageFactory.createLSAUPDATE(
-                          rd,
-                          link.otherRouter.simulatedIPAddress,
-                          newlyAcceptedLSA
-                  );
-
-                  LinkChannel neighbour_ch = link.channel;
-                  try {
-                    neighbour_ch.send(msg);
-                  } catch (IOException e) {
-                    console.log("Could not send LSAUpdate to " + link.otherRouter.simulatedIPAddress);
-                  }
-                });
-
-      }
+  private void handleLinkStateUpdate(SOSPFPacket packet) {
+    if (packet.lsaArray == null || packet.lsaArray.isEmpty()) {
+      return;
     }
 
+    List<LSA> newlyAcceptedLSA = new ArrayList<>();
+
+    // Update existing LSAs
+    packet.lsaArray.stream()
+            .filter(lsa -> !Objects.equals(lsa.linkStateID, rd.simulatedIPAddress)) // Do not update my own LSA
+            .forEach(lsa -> {
+              Optional<LSA> existingLSA = this.lsd.getLSA(lsa.linkStateID);
+              if (existingLSA.isEmpty() || lsa.getSeqNumber() > existingLSA.get().getSeqNumber()) {
+                LSA storedCopy = LSA.copyOf(lsa);
+                this.lsd.addLSA(storedCopy.linkStateID, storedCopy);
+                newlyAcceptedLSA.add(LSA.copyOf(storedCopy));
+              }
+            });
+
+    // Propagate new LSAs for neighbous
+    if (newlyAcceptedLSA.isEmpty()) {
+      return;
+    }
+
+    this.portsTable.getTwoWays()
+            .stream()
+            .filter(link -> !Objects.equals(link.otherRouter.simulatedIPAddress, packet.srcIP))
+            .forEach(link -> {
+              SOSPFPacket msg = SOSPFMessageFactory.createLSAUPDATE(
+                      rd,
+                      link.otherRouter.simulatedIPAddress,
+                      newlyAcceptedLSA
+              );
+
+              LinkChannel neighbour_ch = link.channel;
+              try {
+                neighbour_ch.send(msg);
+              } catch (IOException e) {
+                console.log("Could not send LSAUpdate to " + link.otherRouter.simulatedIPAddress);
+              }
+            });
   }
 
   /**
