@@ -44,12 +44,13 @@ public class Link {
 
                 } catch (EOFException e) {
                   // EOFException would imply that the socket closed on the other side
-                  // ignore it for now, and just show it to the client
-                  // TODO: as the assignment goes we can determine what behaviour we want for it
+                  // Maintain neighbour in ports table but drop adjacency state.
+                  this.markDisconnected();
 
                   errorHandler.handle(e);
                   break;
                 } catch (IOException | ClassNotFoundException e) {
+                  markDisconnected();
                   errorHandler.handle(e);
                   break;
                 }
@@ -60,6 +61,13 @@ public class Link {
 
   public void delete() {
     this.channel.close();
+  }
+
+  private void markDisconnected() {
+    if (this.otherRouter != null) {
+      this.otherRouter.status = null;
+    }
+    this.helloInitiatedByMe = false;
   }
 
   @Override
