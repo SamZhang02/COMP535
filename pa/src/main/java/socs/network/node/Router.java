@@ -29,11 +29,11 @@ public class Router {
 
 
   public Router(Configuration config, RouterTransport rt, Console console, PortsTable portsTable) {
-    lsd = new LinkStateDatabase(rd);
-
     rd.processIPAddress = config.getString("socs.network.router.pip");
     rd.processPortNumber = config.getShort("socs.network.router.port");
     rd.simulatedIPAddress = config.getString("socs.network.router.ip");
+
+    lsd = new LinkStateDatabase(rd);
 
     routerTransport = rt;
     this.console = console;
@@ -156,36 +156,9 @@ public class Router {
               }
             });
 
-    // Populate my lsa
-    LSA myLSA = lsd.getMyLSA();
-
-    List<LinkDescription> newLinks = this.portsTable
-            .getTwoWays()
-            .stream()
-            .map(LinkDescription::fromLink)
-            .toList();
-
-    if (!newLinks.equals(myLSA.getLinks())) {
-      myLSA.setLinks(newLinks);
-      myLSA.bumpSeqNumber();
-    }
-
-    // LSAUPDATE to neighbours
-    portsTable.getTwoWays().forEach(
-            link -> {
-              SOSPFPacket msg = SOSPFMessageFactory.createLSAUPDATE(
-                      rd,
-                      link.otherRouter.simulatedIPAddress,
-                      lsd.getSnapshot()
-              );
-
-              try {
-                link.channel.send(msg);
-              } catch (IOException e) {
-                throw new RuntimeException(e);
-              }
-            }
-    );
+    // Sync immediately for already established neighbors; newly established ones
+    // will trigger sync when they transition to TWO_WAY in HELLO handling.
+    synchronizeAndBroadcastLsd();
   }
 
   /**
@@ -368,8 +341,10 @@ public class Router {
 
   private void linkPacketHandler(SOSPFPacket packet, LinkChannel ch) {
     if (packet == null) {
+      console.log("Received null packet");
       return;
     }
+
     console.log("Received " + packet.displayString() + " FROM " + packet.srcIP + ";");
 
     boolean isAttachRequestResponse = packet.sospfType == SOSPFPacket.SOSPFType.HELLO && packet.accepted != null;
@@ -396,12 +371,14 @@ public class Router {
       Link link = linkOpt.get();
       RouterStatus status = link.otherRouter.status;
       boolean shouldReplyHello = false;
+      boolean becameTwoWay = false;
 
       if (status == null) {
         link.otherRouter.status = RouterStatus.INIT;
         shouldReplyHello = true;
       } else if (status == RouterStatus.INIT) {
         link.otherRouter.status = RouterStatus.TWO_WAY;
+        becameTwoWay = true;
         if (link.helloInitiatedByMe) {
           shouldReplyHello = true;
           link.helloInitiatedByMe = false;
@@ -418,7 +395,51 @@ public class Router {
           throw new RuntimeException(e);
         }
       }
+
+      if (becameTwoWay) {
+        synchronizeAndBroadcastLsd();
+      }
     }
+  }
+
+  /**
+   * It can happen that our LSA and actually connected links are out of things like disconnection.
+   * Update LSA states to the current links states.
+   */
+  private synchronized void synchronizeAndBroadcastLsd() {
+    LSA myLSA = lsd.getMyLSA();
+
+    List<LinkDescription> newLinks = this.portsTable
+            .getTwoWays()
+            .stream()
+            .map(LinkDescription::fromLink)
+            .toList();
+
+    List<LinkDescription> currentNonSelfLinks = myLSA.getLinks()
+            .stream()
+            .filter(ld -> !(myLSA.linkStateID.equals(ld.linkID) && ld.weight == 0))
+            .toList();
+
+    if (!newLinks.equals(currentNonSelfLinks)) {
+      myLSA.clearLinks();
+      myLSA.addLinks(newLinks);
+      myLSA.bumpSeqNumber();
+    }
+
+    List<LSA> snapshot = lsd.getSnapshot();
+    portsTable.getTwoWays().forEach(link -> {
+      SOSPFPacket msg = SOSPFMessageFactory.createLSAUPDATE(
+              rd,
+              link.otherRouter.simulatedIPAddress,
+              snapshot
+      );
+
+      try {
+        link.channel.send(msg);
+      } catch (IOException e) {
+        console.log("Failed to send LSAUpdate to " + link.otherRouter.simulatedIPAddress + ": " + e.getMessage());
+      }
+    });
   }
 
   public void processPort() {

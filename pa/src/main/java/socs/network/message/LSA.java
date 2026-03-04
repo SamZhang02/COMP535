@@ -22,8 +22,14 @@ public class LSA implements Serializable {
     return lsaSeqNumber;
   }
 
-  public void setLinks(List<LinkDescription> newLinks) {
-    links = newLinks;
+  public void clearLinks() {
+    links.removeIf(ld -> !(linkStateID != null
+            && linkStateID.equals(ld.linkID)
+            && ld.weight == 0));
+  }
+
+  public void addLinks(List<LinkDescription> newLinks) {
+    links.addAll(newLinks);
   }
 
   public boolean addLink(LinkDescription ld) {

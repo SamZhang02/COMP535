@@ -11,5 +11,13 @@ run arg:
 	mvn clean package assembly:single
 	java -jar target/COMP535-1.0-SNAPSHOT-jar-with-dependencies.jar {{arg}}
 
+run1:
+	mvn clean package assembly:single
+	java -jar target/COMP535-1.0-SNAPSHOT-jar-with-dependencies.jar conf/router1.conf
+
+run2:
+	mvn clean package assembly:single
+	java -jar target/COMP535-1.0-SNAPSHOT-jar-with-dependencies.jar conf/router2.conf
+
 test:
 	mvn test
