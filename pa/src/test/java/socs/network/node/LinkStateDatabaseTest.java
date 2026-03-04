@@ -76,6 +76,23 @@ public class LinkStateDatabaseTest {
     assertEquals(Arrays.asList("A"), lsd.getShortestPath("A"));
   }
 
+  @Test
+  public void getShortestPath_shouldPreferR3ChainOverR7Detour() {
+    RouterDescription rd = new RouterDescription("127.0.0.1", (short) 2010, "R1");
+    LinkStateDatabase lsd = new LinkStateDatabase(rd);
+
+    LSA r1 = lsd.getMyLSA();
+    r1.addLink(link("R2", 2));
+
+    lsd.addLSA("R2", lsa("R2", link("R1", 2), link("R3", 2), link("R7", 5)));
+    lsd.addLSA("R3", lsa("R3", link("R2", 2), link("R4", 2), link("R7", 5)));
+    lsd.addLSA("R4", lsa("R4", link("R3", 2), link("R5", 2)));
+    lsd.addLSA("R5", lsa("R5", link("R4", 2), link("R7", 10)));
+    lsd.addLSA("R7", lsa("R7", link("R2", 5), link("R3", 5), link("R5", 10)));
+
+    assertEquals(Arrays.asList("R1", "R2", "R3", "R4", "R5"), lsd.getShortestPath("R5"));
+  }
+
   private static LSA lsa(String origin, LinkDescription... links) {
     LSA lsa = new LSA();
     lsa.linkStateID = origin;
