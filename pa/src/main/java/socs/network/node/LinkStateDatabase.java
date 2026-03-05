@@ -21,13 +21,13 @@ public class LinkStateDatabase {
   /**
    * output the shortest path from this router to the destination with the given IP address
    * <p/>
-   * This method should use Dijkstra's algorithm with link weights (not hop count) to find the shortest path.
+   * This method uses Dijkstra's algorithm with link weights (not hop count) to find the shortest path.
    * The weights are stored in the cost field of LinkDescription objects in the LSA entries.
    * <p/>
    * format: source ip address -> ip address -> ... -> destination ip
    *
    * @param destinationIP the simulated IP address of the destination router
-   * @return the shortest path as an array of string (ip address), or null if no path exists
+   * @return the shortest path as a list of string (ip address), or null if no path exists
    */
   List<String> getShortestPath(String destinationIP) {
     Map<String, Integer> costTable = new HashMap<>();
