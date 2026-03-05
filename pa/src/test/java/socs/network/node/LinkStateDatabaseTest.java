@@ -64,7 +64,7 @@ public class LinkStateDatabaseTest {
     lsd.addLSA("H", lsa("H", link("I", 1)));
     lsd.addLSA("I", lsa("I", link("H", 1)));
 
-    assertEquals(Arrays.asList("A", "B", "C", "D", "E", "F", "G"), lsd.getShortestPath("G"));
+    assertEquals(List.of("A", "B", "C", "D", "E", "F", "G"), lsd.getShortestPath("G"));
     assertNull(lsd.getShortestPath("H"));
   }
 
@@ -73,7 +73,7 @@ public class LinkStateDatabaseTest {
     RouterDescription rd = new RouterDescription("127.0.0.1", (short) 2002, "A");
     LinkStateDatabase lsd = new LinkStateDatabase(rd);
 
-    assertEquals(Arrays.asList("A"), lsd.getShortestPath("A"));
+    assertEquals(List.of("A"), lsd.getShortestPath("A"));
   }
 
   @Test
@@ -90,13 +90,13 @@ public class LinkStateDatabaseTest {
     lsd.addLSA("R5", lsa("R5", link("R4", 2), link("R7", 10)));
     lsd.addLSA("R7", lsa("R7", link("R2", 5), link("R3", 5), link("R5", 10)));
 
-    assertEquals(Arrays.asList("R1", "R2", "R3", "R4", "R5"), lsd.getShortestPath("R5"));
+    assertEquals(List.of("R1", "R2", "R3", "R4", "R5"), lsd.getShortestPath("R5"));
   }
 
   private static LSA lsa(String origin, LinkDescription... links) {
     LSA lsa = new LSA();
     lsa.linkStateID = origin;
-    lsa.addLinks(Arrays.asList(links));
+    lsa.addLinks(List.of(links));
     return lsa;
   }
 
