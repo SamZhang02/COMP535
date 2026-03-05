@@ -362,7 +362,6 @@ public class Router {
 
 
   private SOSPFPacket handleAttachRequest(SOSPFPacket packet, LinkChannel linkChannel) {
-    console.log("\nReceived " + packet.displayString() + " from " + packet.srcIP);
 
     String answer;
     answer = console
@@ -399,8 +398,6 @@ public class Router {
       return;
     }
 
-    console.log("Received " + packet.displayString() + " FROM " + packet.srcIP + ";");
-
     if (isAttachRequestResponse(packet) && handleAttachRequestResponse(packet)) {
       return;
     }
@@ -428,6 +425,8 @@ public class Router {
   }
 
   private void handleDatabaseSyncHello(SOSPFPacket packet, LinkChannel ch) {
+    console.log("\nReceived " + packet.displayString() + " from " + packet.srcIP);
+
     String otherRouterIP = packet.srcIP;
     Optional<Link> linkOpt = portsTable.get(otherRouterIP);
 
@@ -469,6 +468,12 @@ public class Router {
     }
   }
 
+  /**
+   * Handler for LSAUpdate.
+   * Upon receiving an LSAUpdate, we should propagate any new LSA to neighbours.
+   *
+   * @param packet
+   */
   private void handleLinkStateUpdate(SOSPFPacket packet) {
     if (packet.lsaArray == null || packet.lsaArray.isEmpty()) {
       return;
@@ -495,7 +500,10 @@ public class Router {
 
     this.portsTable.getTwoWays()
             .stream()
-            .filter(link -> !Objects.equals(link.otherRouter.simulatedIPAddress, packet.srcIP))
+            .filter(link -> !Objects.equals(
+                    link.otherRouter.simulatedIPAddress,
+                    packet.srcIP
+            )) // Skip the router you received this update from
             .forEach(link -> {
               SOSPFPacket msg = SOSPFMessageFactory.createLSAUPDATE(
                       rd,
@@ -536,7 +544,7 @@ public class Router {
       myLSA.bumpSeqNumber();
     }
 
-    List<LSA> snapshot = lsd.getSnapshot();
+    List<LSA> snapshot = lsd.getImmutableSnapshot();
     portsTable.getTwoWays().forEach(link -> {
       SOSPFPacket msg = SOSPFMessageFactory.createLSAUPDATE(
               rd,

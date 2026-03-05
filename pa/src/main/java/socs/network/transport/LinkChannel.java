@@ -25,6 +25,7 @@ public class LinkChannel {
   public synchronized void send(SOSPFPacket p) throws IOException {
     out.writeObject(p);
     out.flush();
+    out.reset();
   }
 
   public SOSPFPacket receive() throws IOException, ClassNotFoundException {

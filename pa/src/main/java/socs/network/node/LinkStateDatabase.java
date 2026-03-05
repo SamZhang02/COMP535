@@ -112,8 +112,11 @@ public class LinkStateDatabase {
     return Optional.ofNullable(this._store.get(id));
   }
 
-  synchronized public List<LSA> getSnapshot() {
-    return this._store.values().stream().toList();
+  synchronized public List<LSA> getImmutableSnapshot() {
+    return this._store.values()
+            .stream()
+            .map(LSA::copyOf)
+            .toList();
   }
 
   //initialize the linkstate database by adding an entry about the router itself
