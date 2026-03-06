@@ -3,4 +3,4 @@ default:
 
 package name="pa.zip":
 	rm -f "{{name}}"
-	zip -r "{{name}}" pa
+	zip -r "{{name}}" pa -x "pa/target/*" "pa/out/*"
