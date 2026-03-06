@@ -55,11 +55,27 @@ just build
 just test
 ```
 
+Running conf/router1.conf:
+
 ```just
-just run conf/router1.conf
+just run 1   
 ```
 
-## Implementation
+## Project Structure
+
+```
+src/
+  main/
+    java/               # Source code
+  resources/            # Configuration files
+  test/
+    integration-test/   # Integration tests
+    java/               # Unit tests
+conf/                   # Router configuration files
+target/                 # Compiled classes (generated)
+```
+
+## PA1 Implementation
 
 ### CLI
 
@@ -112,17 +128,31 @@ We also made some assupmptions on the behaviour of the application for edge case
 3. We did not implement much handling for connection issues, since it wasn't specified the protocol for it right now. If
    an
    attached router goes down (socket closed), for now the application just prints the error (EOFexception) out.
+   .
 
-## Project Structure
+## PA2 Implementation
 
-```
-src/
-  main/
-    java/               # Source code
-  resources/            # Configuration files
-  test/
-    integration-test/   # Integration tests
-    java/               # Unit tests
-conf/                   # Router configuration files
-target/                 # Compiled classes (generated)
-```
+### LSAUpdate
+
+LSAUpdate gets triggered on a couple scenarios
+
+- Running `start`: Synchronizes LSA for current TWO_WAY neighbours
+- Receiving DBSyncHello: This implies that a neighbour may have turned TWO_WAY, which means we must synchronize LSAs/
+- Receiving an LSAUpdate: Cross-check with current LSD, if the LSA from the router that sent the update differs in seq
+  number, update local LSD to match the new version.
+
+### Detect
+
+This runs the shortest pathfinding algorithm and returns the path
+
+### Send
+
+At the start router, it
+
+1. Runs the shortest pathfinding algorithm
+2. Extracts the next hop
+3. Send the packet to the next hop
+4. Repeat 1-3 until it reaches the destination IP
+
+We do hop-by-hop routing because this is good at handling if the network topology changes mid-travel compared to source
+routing. The downside is that it is less efficient to run the pathfinding at every hop.
