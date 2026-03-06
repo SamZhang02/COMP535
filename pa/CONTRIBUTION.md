@@ -9,6 +9,7 @@ We did not specifically hold meetings, but we frequently exchanged messages on r
 ## Specific contributions
 
 Sam: LSAUpdate, shortest path finding, parts of processSend (handling incoming messages and deciding whether forward it or mark as delivered)
+
 Kevin: processDetect, part of processSend (reading the command, determining next hop)
 
 Contribution is equal.
