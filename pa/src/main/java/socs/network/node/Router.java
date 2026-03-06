@@ -149,7 +149,7 @@ public class Router {
    * broadcast Hello to neighbors
    */
   public void processStart() {
-    // HELLO all links
+    // HELLO all new links
     portsTable.getAllLinks()
             .stream()
             .filter(link -> link.otherRouter.status == null)
@@ -172,7 +172,7 @@ public class Router {
   /**
    * attach the link to the remote router, which is identified by the given simulated ip;
    * to establish the connection via socket, you need to indentify the process IP and process Port;
-   * additionally, cost is the cost to transmitting data through the link
+   * additionally, weight is the cost to transmitting data through the link
    * <p/>
    * This command does trigger the link database synchronization
    */
@@ -472,7 +472,7 @@ public class Router {
    * Handler for LSAUpdate.
    * Upon receiving an LSAUpdate, we should propagate any new LSA to neighbours.
    *
-   * @param packet
+   * @param packet the LSUPDATE packet received from neighbour
    */
   private void handleLinkStateUpdate(SOSPFPacket packet) {
     if (packet.lsaArray == null || packet.lsaArray.isEmpty()) {
@@ -486,6 +486,7 @@ public class Router {
             .filter(lsa -> !Objects.equals(lsa.linkStateID, rd.simulatedIPAddress)) // Do not update my own LSA
             .forEach(lsa -> {
               Optional<LSA> existingLSA = this.lsd.getLSA(lsa.linkStateID);
+
               if (existingLSA.isEmpty() || lsa.getSeqNumber() > existingLSA.get().getSeqNumber()) {
                 LSA storedCopy = LSA.copyOf(lsa);
                 this.lsd.addLSA(storedCopy.linkStateID, storedCopy);
@@ -521,8 +522,7 @@ public class Router {
   }
 
   /**
-   * It can happen that our LSA and actually connected links are out of things like disconnection.
-   * Update this router's LSA states to the current links states.
+   * Update this router's LSA states to the current TWO-WAY links states.
    */
   private synchronized void synchronizeAndBroadcastLsd() {
     LSA myLSA = lsd.getMyLSA();

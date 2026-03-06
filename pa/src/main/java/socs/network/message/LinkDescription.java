@@ -45,18 +45,4 @@ public class LinkDescription implements Serializable {
   public int hashCode() {
     return Objects.hash(linkID, tosMetrics, weight);
   }
-
-  public int compareByWeight(LinkDescription other) {
-    int byWeight = Integer.compare(this.weight, other.weight);
-    if (byWeight != 0) {
-      return byWeight;
-    }
-
-    int byLinkId = String.valueOf(this.linkID).compareTo(String.valueOf(other.linkID));
-    if (byLinkId != 0) {
-      return byLinkId;
-    }
-
-    return Integer.compare(this.tosMetrics, other.tosMetrics);
-  }
 }
