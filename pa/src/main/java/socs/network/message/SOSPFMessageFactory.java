@@ -46,6 +46,12 @@ public class SOSPFMessageFactory {
 
   }
 
+  public static SOSPFPacket createDisconnect(RouterDescription srcRd, String dstSimulatedIp) {
+    return basePacket(srcRd, dstSimulatedIp)
+            .setSospfType(SOSPFPacket.SOSPFType.DISCONNECT)
+            .createSOSPFPacket();
+  }
+
   private static SOSPFPacketBuilder basePacket(RouterDescription rd, String dstIP) {
     return new SOSPFPacketBuilder()
             .setRequestId(UUID.randomUUID().toString())

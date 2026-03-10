@@ -21,6 +21,8 @@ public class Link {
 
   public LinkChannel channel;
   public boolean helloInitiatedByMe;
+  private volatile boolean closed;
+  private Thread listenerThread;
 
   public Link(RouterDescription ourRouter, RouterDescription otherRouter, int weight, LinkChannel channel) {
     this.ourRouter = ourRouter;
@@ -28,12 +30,18 @@ public class Link {
     this.weight = weight;
     this.channel = channel;
     this.helloInitiatedByMe = false;
+    this.closed = false;
+    this.listenerThread = null;
   }
 
-  public void listen(PacketHandler handler, ErrorHandler errorHandler) {
-    new Thread(
+  public synchronized void listen(PacketHandler handler, ErrorHandler errorHandler) {
+    if (this.listenerThread != null && this.listenerThread.isAlive()) {
+      return;
+    }
+
+    this.listenerThread = new Thread(
             () -> {
-              while (!Thread.currentThread().isInterrupted()) {
+              while (!Thread.currentThread().isInterrupted() && !closed) {
                 try {
                   SOSPFPacket packet = channel.receive();
                   try {
@@ -46,20 +54,35 @@ public class Link {
                   // EOFException would imply that the socket closed on the other side
                   // Maintain neighbour in ports table but drop adjacency state.
                   this.markDisconnected();
-
-                  errorHandler.handle(e);
+                  if (!closed) {
+                    errorHandler.handle(e);
+                  }
                   break;
                 } catch (IOException | ClassNotFoundException e) {
                   markDisconnected();
-                  errorHandler.handle(e);
+                  if (!closed) {
+                    errorHandler.handle(e);
+                  }
                   break;
                 }
               }
             }, "link-listener-" + otherRouter.simulatedIPAddress
-    ).start();
+    );
+    this.listenerThread.start();
   }
 
-  public void delete() {
+  public synchronized void close() {
+    if (closed) {
+      return;
+    }
+
+    this.closed = true;
+    this.markDisconnected();
+    Thread thread = this.listenerThread;
+    if (thread != null) {
+      thread.interrupt();
+      this.listenerThread = null;
+    }
     this.channel.close();
   }
 

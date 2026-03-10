@@ -15,7 +15,7 @@ public class SOSPFPacket implements Serializable {
   public String dstIP;
 
   //common header
-  public SOSPFType sospfType; //0 - HELLO, 1 - LinkState Update, 2 - Application Message
+  public SOSPFType sospfType; //0 - HELLO, 1 - LinkState Update, 2 - Application Message, 3 - Disconnect
   public String routerID;
 
   // null if not a response
@@ -64,6 +64,8 @@ public class SOSPFPacket implements Serializable {
         return "HELLO";
       case LINKSTATE_UPDATE:
         return "LINKSTATE UPDATE";
+      case DISCONNECT:
+        return "DISCONNECT";
       default:
         return this.message;
     }
@@ -89,7 +91,8 @@ public class SOSPFPacket implements Serializable {
   public enum SOSPFType {
     HELLO((short) 0),
     LINKSTATE_UPDATE((short) 1),
-    APPLICATION_MSG((short) 2);
+    APPLICATION_MSG((short) 2),
+    DISCONNECT((short) 3);
 
     SOSPFType(short k) {
     }

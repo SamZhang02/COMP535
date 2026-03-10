@@ -3,6 +3,7 @@ package socs.network.message;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 // Link State Advertisement
 public class LSA implements Serializable {
@@ -47,6 +48,10 @@ public class LSA implements Serializable {
 
   public boolean addLink(LinkDescription ld) {
     return links.add(ld);
+  }
+
+  public void removeLink(String ip) {
+    this.links.removeIf(ld -> Objects.equals(ld.linkID, ip));
   }
 
   public List<LinkDescription> getLinks() {
