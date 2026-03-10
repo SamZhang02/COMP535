@@ -67,8 +67,10 @@ public class PortsTable {
     }
   }
 
-  public void removeLinkAt(int port) {
+  public Link removeLinkAt(int port) {
+    Link link = this.ports[port];
     this.ports[port] = null;
+    return link;
   }
 
   public boolean containsIP(String simulatedIP) {
