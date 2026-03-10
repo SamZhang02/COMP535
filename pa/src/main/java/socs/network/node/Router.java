@@ -184,6 +184,7 @@ public class Router {
   ) {
     if (!this.started) {
       console.log("Cannot run connect before running start.");
+      return;
     }
 
     List<Link> currLinks = this.portsTable.getAllLinks();
@@ -192,6 +193,7 @@ public class Router {
     boolean newLinkAdded = currLinks.size() != this.portsTable.getAllLinks().size();
     if (newLinkAdded) {
       console.log("Link established with " + simulatedIP)
+      console.log("Link established with " + simulatedIP);
       this.processStart();
     }
   }
