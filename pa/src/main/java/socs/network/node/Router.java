@@ -29,6 +29,8 @@ public class Router {
   private final ErrorHandler errorHandler;
   private Thread clientServiceThread;
 
+  private boolean started = false;
+
 
   public Router(Configuration config, RouterTransport rt, Console console, PortsTable portsTable) {
     rd.processIPAddress = config.getString("socs.network.router.pip");
@@ -180,7 +182,18 @@ public class Router {
           String processIP, short processPort,
           String simulatedIP, short weight
   ) {
+    if (!this.started) {
+      console.log("Cannot run connect before running start.");
+    }
 
+    List<Link> currLinks = this.portsTable.getAllLinks();
+    this.processAttach(processIP, processPort, simulatedIP, weight);
+
+    boolean newLinkAdded = currLinks.size() != this.portsTable.getAllLinks().size();
+    if (newLinkAdded) {
+      console.log("Link established with " + simulatedIP)
+      this.processStart();
+    }
   }
 
   /**
@@ -479,6 +492,9 @@ public class Router {
       return;
     }
 
+    console.log("Received LSAUpdate from " + packet.srcIP);
+    console.log("Updating link state database");
+
     List<LSA> newlyAcceptedLSA = new ArrayList<>();
 
     // Update existing LSAs
@@ -525,6 +541,8 @@ public class Router {
    * Update this router's LSA states to the current TWO-WAY links states.
    */
   private synchronized void synchronizeAndBroadcastLsd() {
+    console.log("Broadcasting LSAUpdate");
+
     LSA myLSA = lsd.getMyLSA();
 
     List<LinkDescription> newLinks = this.portsTable
