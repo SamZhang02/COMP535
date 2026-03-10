@@ -100,6 +100,7 @@ public class LinkStateDatabase {
     return this._store.get(rd.simulatedIPAddress);
   }
 
+
   synchronized public void addLSA(String id, LSA lsa) {
     this._store.put(id, lsa);
   }

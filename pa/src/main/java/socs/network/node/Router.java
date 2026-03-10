@@ -218,17 +218,32 @@ public class Router {
    * disconnect with all neighbors and quit the program
    */
   public void processQuit() {
+    LSA lsa = this.lsd.getMyLSA();
+    lsa.clearLinks();
+    lsa.bumpSeqNumber();
 
-  }
+    this.portsTable.getTwoWays().forEach(link -> {
+      SOSPFPacket lsUpdateMsg = SOSPFMessageFactory.createLSAUPDATE(
+              rd,
+              link.otherRouter.simulatedIPAddress,
+              List.of(lsa)
+      );
+      try {
+        link.channel.send(lsUpdateMsg);
+      } catch (IOException e) {
+        console.log("Could not send LSAUpdate on quit");
+      }
 
-  /**
-   * update the cost of an attached link
-   */
-  public void updateWeight(
-          String processIP, short processPort,
-          String simulatedIP, short weight
-  ) {
+      SOSPFPacket disconnectMsg = SOSPFMessageFactory.createDisconnect(rd, link.otherRouter.simulatedIPAddress);
+      try {
+        link.channel.send(disconnectMsg);
+      } catch (IOException e) {
+        console.log("Could not send DISCONNECT on quit");
+      }
+    });
 
+    console.log("Router shutting down");
+    System.exit(0);
   }
 
   /**
@@ -240,7 +255,23 @@ public class Router {
    * @param newWeight  the new cost/cost for the link attached to this port
    */
   public void processUpdate(short portNumber, short newWeight) {
+    Optional<Link> link = Optional.ofNullable(this.portsTable.get(portNumber));
+    link.ifPresent(l -> {
+      l.weight = newWeight;
 
+      LSA myLSA = this.lsd.getMyLSA();
+      myLSA.getLink(l.otherRouter.simulatedIPAddress).ifPresent(ld -> ld.weight = newWeight);
+      myLSA.bumpSeqNumber();
+
+      Optional<LSA> otherLSA = this.lsd.getLSA(l.otherRouter.simulatedIPAddress);
+      otherLSA.flatMap(lsa -> lsa.getLink(rd.simulatedIPAddress))
+              .ifPresent(ld -> {
+                ld.weight = newWeight;
+              });
+      otherLSA.ifPresent(LSA::bumpSeqNumber);
+
+      synchronizeAndBroadcastLsd();
+    });
   }
 
   /**
@@ -535,23 +566,35 @@ public class Router {
     console.log("Received LSAUpdate from " + packet.srcIP);
     console.log("Updating link state database");
 
-    List<LSA> newlyAcceptedLSA = new ArrayList<>();
+    List<LSA> updatedLSA = new ArrayList<>();
 
     // Update existing LSAs
-    packet.lsaArray.stream()
-            .filter(lsa -> !Objects.equals(lsa.linkStateID, rd.simulatedIPAddress)) // Do not update my own LSA
+    packet.lsaArray
+//            .stream()
+//            .filter(lsa -> !Objects.equals(lsa.linkStateID, rd.simulatedIPAddress)) // Do not update my own LSA
             .forEach(lsa -> {
               Optional<LSA> existingLSA = this.lsd.getLSA(lsa.linkStateID);
 
               if (existingLSA.isEmpty() || lsa.getSeqNumber() > existingLSA.get().getSeqNumber()) {
+
+                // Got LSA bump for my own LSA, a weight might have changed
+                if (existingLSA.isPresent() && existingLSA.get().linkStateID.equals(rd.simulatedIPAddress)) {
+                  lsa.getLinks().forEach(ld -> {
+                    this.portsTable.get(ld.linkID).ifPresent(link -> link.weight = ld.weight);
+                  });
+                }
+                ;
+
                 LSA storedCopy = LSA.copyOf(lsa);
                 this.lsd.addLSA(storedCopy.linkStateID, storedCopy);
-                newlyAcceptedLSA.add(LSA.copyOf(storedCopy));
+                updatedLSA.add(LSA.copyOf(storedCopy));
               }
+
+
             });
 
     // Propagate new LSAs for neighbous
-    if (newlyAcceptedLSA.isEmpty()) {
+    if (updatedLSA.isEmpty()) {
       return;
     }
 
@@ -565,7 +608,7 @@ public class Router {
               SOSPFPacket msg = SOSPFMessageFactory.createLSAUPDATE(
                       rd,
                       link.otherRouter.simulatedIPAddress,
-                      newlyAcceptedLSA
+                      updatedLSA
               );
 
               LinkChannel neighbour_ch = link.channel;
