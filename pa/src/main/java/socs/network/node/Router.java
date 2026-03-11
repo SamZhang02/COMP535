@@ -156,6 +156,11 @@ public class Router {
    * broadcast Hello to neighbors
    */
   public void processStart() {
+    if (this.portsTable.used() == 0) {
+      console.log("Nothing is attached");
+      return;
+    }
+
     // HELLO all new links
     portsTable.getAllLinks()
             .stream()
