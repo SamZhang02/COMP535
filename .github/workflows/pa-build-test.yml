@@ -11,7 +11,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: pa
+        working-directory: pa1-3
 
     steps:
       - name: Checkout repository
