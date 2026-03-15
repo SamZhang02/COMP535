@@ -54,13 +54,13 @@ public class Link {
                   // EOFException would imply that the socket closed on the other side
                   // Maintain neighbour in ports table but drop adjacency state.
                   this.markDisconnected();
-                  if (!closed) {
+                  if (!shouldSuppressDisconnectException(e)) {
                     errorHandler.handle(e);
                   }
                   break;
                 } catch (IOException | ClassNotFoundException e) {
                   markDisconnected();
-                  if (!closed) {
+                  if (!shouldSuppressDisconnectException(e)) {
                     errorHandler.handle(e);
                   }
                   break;
@@ -91,6 +91,28 @@ public class Link {
       this.otherRouter.status = null;
     }
     this.helloInitiatedByMe = false;
+  }
+
+  // We gracefully handle some exceptions related to socket closure during disconnects and exits
+  private boolean shouldSuppressDisconnectException(Exception e) {
+    if (closed || e instanceof EOFException) {
+      return true;
+    }
+
+    if (e instanceof IOException io) {
+      String msg = io.getMessage();
+      if (msg == null) {
+        return false;
+      }
+
+      String normalized = msg.toLowerCase();
+      return normalized.contains("connection reset") ||
+              normalized.contains("socket closed") ||
+              normalized.contains("broken pipe") ||
+              normalized.contains("connection aborted");
+    }
+
+    return false;
   }
 
   @Override
