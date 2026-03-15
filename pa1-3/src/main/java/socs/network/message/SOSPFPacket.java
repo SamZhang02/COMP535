@@ -66,6 +66,8 @@ public class SOSPFPacket implements Serializable {
         return "LINKSTATE UPDATE";
       case DISCONNECT:
         return "DISCONNECT";
+      case EXIT:
+        return "EXIT";
       default:
         return this.message;
     }
@@ -92,7 +94,8 @@ public class SOSPFPacket implements Serializable {
     HELLO((short) 0),
     LINKSTATE_UPDATE((short) 1),
     APPLICATION_MSG((short) 2),
-    DISCONNECT((short) 3);
+    EXIT((short) 3),
+    DISCONNECT((short) 4);
 
     SOSPFType(short k) {
     }

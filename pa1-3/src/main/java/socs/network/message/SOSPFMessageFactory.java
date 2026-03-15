@@ -46,9 +46,24 @@ public class SOSPFMessageFactory {
 
   }
 
+  public static SOSPFPacket createExit(RouterDescription srcRd, String dstSimulatedIp) {
+    return basePacket(srcRd, dstSimulatedIp)
+            .setSospfType(SOSPFPacket.SOSPFType.EXIT)
+            .setNeighborID(srcRd.simulatedIPAddress)
+            .createSOSPFPacket();
+  }
+
   public static SOSPFPacket createDisconnect(RouterDescription srcRd, String dstSimulatedIp) {
     return basePacket(srcRd, dstSimulatedIp)
             .setSospfType(SOSPFPacket.SOSPFType.DISCONNECT)
+            .setNeighborID(srcRd.simulatedIPAddress)
+            .createSOSPFPacket();
+  }
+
+  public static SOSPFPacket createExit(RouterDescription srcRd, String dstSimulatedIp, String exitIp) {
+    return basePacket(srcRd, dstSimulatedIp)
+            .setSospfType(SOSPFPacket.SOSPFType.EXIT)
+            .setNeighborID(exitIp)
             .createSOSPFPacket();
   }
 

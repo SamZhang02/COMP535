@@ -58,7 +58,7 @@ just test
 Running conf/router1.conf:
 
 ```just
-just run 1   
+just run 1
 ```
 
 ## Project Structure
@@ -156,3 +156,41 @@ At the start router, it
 
 We do hop-by-hop routing because this is good at handling if the network topology changes mid-travel compared to source
 routing. The downside is that it is less efficient to run the pathfinding at every hop.
+
+## PA3 Implementations
+
+### Connect
+
+We added a flag for whether the router has already ran `start`, if it has, we allow it to run the `connect` command.
+
+The connect command simply calls `processAttach` and `processStart` to run both operations at the same time on a single new neighbouring router.
+
+### Update
+
+When a router X runs the update command for the weight of the edge to router Y, it makes changes in its LSD and ports to update the weight:
+
+- X's port table needs a new updated weight to Y
+- In X's LSD, X's LSA needs a new updated weight to Y
+- In X's LSD, Y's LSA needs a new updated weight toX
+
+After these changes are made, X sends an LSAUpdate to neighbours.
+
+When Y receive X's LSAUpdate, it will see that its own LSA's sequence number received in the packet is higher than its local LSD, and know that a weight may have been changed. It will iterate it and update its LSD and ports table accordingly.
+
+### Disconnect
+
+When router X runs `disconnect`, it sends a dedicated `DISCONNECT` packet to router Y before closing the local link.
+
+When Y receives `DISCONNECT`, it removes the link to X and closes the socket on its side too. This lets both routers
+gracefully tear down the connection without treating it as a router crash.
+
+After link teardown on both sides, each router synchronizes and broadcasts its LSD so the topology converges to the new
+graph.
+
+### Quit
+
+On quit, a router clears its own LSA and sends it to neighbours to prompt an update removing all links, then sends a special `EXIT` packet to notify them that it is going down, then exits.
+
+When neighbours receive the `EXIT` packet, they close the socket with the router that went down, then broadcasts to all neighbours that said router went down. Neighbours receiving this special packet will remove that router from their LSD. This is important because if that router ever comes back up but restarts its LSA sequence number count, it must be able to cleanly re-instante itself the networks LSD.
+
+An alternative design to this is to keep a router's sequence number on-disk so that it never decrements on reboot. I opted for the former design for ease of demo.

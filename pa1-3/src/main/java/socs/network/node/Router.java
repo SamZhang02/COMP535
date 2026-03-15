@@ -90,13 +90,20 @@ public class Router {
    * @param portNumber the port number which the link attaches at
    */
   public void processDisconnect(short portNumber) {
-    Link removedLink = this.portsTable.removeLinkAt(portNumber);
-    if (removedLink == null) {
+    Link link = this.portsTable.get(portNumber);
+    if (link == null) {
       console.log("No link found at port " + portNumber + ";");
       return;
     }
 
-    disconnectLink(removedLink, true);
+    try {
+      link.channel.send(SOSPFMessageFactory.createDisconnect(rd, link.otherRouter.simulatedIPAddress));
+    } catch (IOException e) {
+      console.log("Could not send DISCONNECT to " + link.otherRouter.simulatedIPAddress);
+    }
+
+    this.portsTable.removeLinkAt(portNumber);
+    disconnectLink(link);
   }
 
   /**
@@ -199,6 +206,18 @@ public class Router {
       return;
     }
 
+    boolean alreadyAttached = this.portsTable.getAllLinks()
+            .stream()
+            .anyMatch(l -> Objects.equals(
+                    l.otherRouter.simulatedIPAddress,
+                    simulatedIP
+            ));
+    if (alreadyAttached) {
+      console.log("Cannot run connect because " + simulatedIP + " is already attached.");
+      return;
+    }
+
+
     List<Link> currLinks = this.portsTable.getAllLinks();
     this.processAttach(processIP, processPort, simulatedIP, weight);
 
@@ -239,11 +258,11 @@ public class Router {
         console.log("Could not send LSAUpdate on quit");
       }
 
-      SOSPFPacket disconnectMsg = SOSPFMessageFactory.createDisconnect(rd, link.otherRouter.simulatedIPAddress);
+      SOSPFPacket disconnectMsg = SOSPFMessageFactory.createExit(rd, link.otherRouter.simulatedIPAddress);
       try {
         link.channel.send(disconnectMsg);
       } catch (IOException e) {
-        console.log("Could not send DISCONNECT on quit");
+        console.log("Could not send EXIT on quit");
       }
     });
 
@@ -463,38 +482,60 @@ public class Router {
       case APPLICATION_MSG -> handleApplicationMessage(packet);
       case HELLO -> handleDatabaseSyncHello(packet, ch);
       case LINKSTATE_UPDATE -> handleLinkStateUpdate(packet);
-      case DISCONNECT -> handleIncomingDisconnect(packet);
+      case DISCONNECT -> handleDisconnect(packet);
+      case EXIT -> handleExit(packet);
       default -> {
       }
     }
   }
 
-  private void handleIncomingDisconnect(SOSPFPacket packet) {
+  private void handleDisconnect(SOSPFPacket packet) {
     Optional<Link> linkOpt = this.portsTable.get(packet.srcIP);
     if (linkOpt.isEmpty()) {
       return;
     }
 
-    this.portsTable.removeLink(linkOpt.get());
-    disconnectLink(linkOpt.get(), false);
+    Link disconnectedLink = linkOpt.get();
+    this.portsTable.removeLink(disconnectedLink);
+    disconnectLink(disconnectedLink);
   }
 
-  private void disconnectLink(Link link, boolean notifyNeighbor) {
-    lsd.getLSA(link.otherRouter.simulatedIPAddress).ifPresent(lsa -> {
+  private void handleExit(SOSPFPacket packet) {
+    lsd.removeLSA(packet.neighborID);
+
+    Optional<Link> linkOpt = this.portsTable.get(packet.neighborID);
+    if (linkOpt.isEmpty()) {
+      return;
+    }
+
+    Link disconnectedLink = linkOpt.get();
+    this.portsTable.removeLink(disconnectedLink);
+
+
+    this.lsd.removeLSA(disconnectedLink.otherRouter.simulatedIPAddress);
+    disconnectLink(disconnectedLink);
+
+    // broadcast that x got disconnected
+    this.portsTable.getTwoWays().stream()
+            .filter(l -> !Objects.equals(l.otherRouter.simulatedIPAddress, packet.srcIP))
+            .forEach(l -> {
+              try {
+                l.channel.send(SOSPFMessageFactory.createExit(
+                        rd,
+                        l.otherRouter.simulatedIPAddress,
+                        disconnectedLink.otherRouter.simulatedIPAddress
+                ));
+              } catch (IOException e) {
+                console.log("Failed to send EXIT to " + l.otherRouter.simulatedIPAddress);
+              }
+            });
+  }
+
+  private void disconnectLink(Link link) {
+    this.lsd.getLSA(link.otherRouter.simulatedIPAddress).ifPresent(lsa -> {
       lsa.removeLink(rd.simulatedIPAddress);
       lsa.bumpSeqNumber();
     });
-
-    if (notifyNeighbor) {
-      try {
-        link.channel.send(SOSPFMessageFactory.createDisconnect(
-                rd,
-                link.otherRouter.simulatedIPAddress
-        ));
-      } catch (IOException e) {
-        console.log("Failed to send DISCONNECT to " + link.otherRouter.simulatedIPAddress);
-      }
-    }
 
     link.close();
     synchronizeAndBroadcastLsd();
@@ -567,9 +608,6 @@ public class Router {
     if (packet.lsaArray == null || packet.lsaArray.isEmpty()) {
       return;
     }
-
-    console.log("Received LSAUpdate from " + packet.srcIP);
-    console.log("Updating link state database");
 
     List<LSA> updatedLSA = new ArrayList<>();
 
@@ -647,7 +685,7 @@ public class Router {
             .toList();
 
     if (!newLinks.equals(currentNonSelfLinks)) {
-      myLSA.clearLinks();
+      myLSA.clearLinksExceptSelf();
       myLSA.addLinks(newLinks);
       myLSA.bumpSeqNumber();
     }

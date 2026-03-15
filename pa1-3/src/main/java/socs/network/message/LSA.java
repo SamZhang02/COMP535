@@ -38,6 +38,10 @@ public class LSA implements Serializable {
   }
 
   public void clearLinks() {
+    links = List.of();
+  }
+
+  public void clearLinksExceptSelf() {
     links.removeIf(ld -> !(linkStateID != null
             && linkStateID.equals(ld.linkID)
             && ld.weight == 0));
@@ -69,7 +73,7 @@ public class LSA implements Serializable {
     LSA copy = new LSA();
     copy.linkStateID = source.linkStateID;
     copy.setSeqNumber(source.getSeqNumber());
-    copy.clearLinks();
+    copy.clearLinksExceptSelf();
     copy.addLinks(source.getLinks().stream().map(LinkDescription::copyOf).toList());
     return copy;
   }
