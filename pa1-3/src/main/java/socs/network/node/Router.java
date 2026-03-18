@@ -21,7 +21,7 @@ import java.util.Optional;
 
 public class Router {
   RouterDescription rd = new RouterDescription();
-  protected LinkStateDatabase lsd;
+  protected final LinkStateDatabase lsd;
 
   private final Console console;
   private final RouterTransport routerTransport;
@@ -74,12 +74,25 @@ public class Router {
    * @param destinationIP the ip adderss of the destination simulated router
    */
   public void processDetect(String destinationIP) {
-    List<String> path = lsd.getShortestPath(destinationIP);
-    if (path != null) {
-      String pathString = String.join(" -> ", path);
-      console.log("Path found: " + pathString);
-    } else {
-      console.log("Path not found");
+    synchronized (this.lsd) {
+      List<String> path = lsd.getShortestPath(destinationIP);
+      if (path != null) {
+        StringBuilder pathString = new StringBuilder(path.getFirst());
+        for (int i = 0; i < path.size() - 1; i++) {
+          String from = path.get(i);
+          String to = path.get(i + 1);
+          String weight = lsd.getLSA(from)
+                  .flatMap(lsa -> lsa.getLink(to))
+                  .map(ld -> String.valueOf(ld.weight))
+                  .orElseThrow(() -> new IllegalStateException(
+                          "Missing link weight for edge " + from + " -> " + to
+                  ));
+          pathString.append(" -> (").append(weight).append(") ").append(to);
+        }
+        console.log("Path found: " + pathString);
+      } else {
+        console.log("Path not found");
+      }
     }
   }
 
