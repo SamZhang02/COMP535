@@ -259,7 +259,7 @@ public class Router {
     lsa.clearLinks();
     lsa.bumpSeqNumber();
 
-    this.portsTable.getTwoWays().forEach(link -> {
+    this.portsTable.getAllLinks().forEach(link -> {
       SOSPFPacket lsUpdateMsg = SOSPFMessageFactory.createLSAUPDATE(
               rd,
               link.otherRouter.simulatedIPAddress,
@@ -523,7 +523,6 @@ public class Router {
 
     Link disconnectedLink = linkOpt.get();
     this.portsTable.removeLink(disconnectedLink);
-
 
     this.lsd.removeLSA(disconnectedLink.otherRouter.simulatedIPAddress);
     disconnectLink(disconnectedLink);
