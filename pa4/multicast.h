@@ -7,23 +7,23 @@
 #include <arpa/inet.h>
 #include <sys/poll.h>
 
-typedef struct _mcast_t
+typedef struct _mcast
 {
-    struct sockaddr_in addr;
-    struct sockaddr_in my_addr;
-    unsigned int addrlen;
-    unsigned int my_addrlen;
-    int sock;
-    struct ip_mreq mreq;
-    struct pollfd fds[2];
-    int nfds;
-} mcast_t;
+    struct sockaddr_in addr; // Destination Address
+    struct sockaddr_in my_addr; // Local Address 
+    unsigned int addrlen; // Memory Size of addr
+    unsigned int my_addrlen; // Memory Size of my_addr
+    int sock; // SocketFile Descriptor
+    struct ip_mreq mreq; // IP Multicast Request
+    struct pollfd fds[2]; // File Descriptors to watch
+    int nfds; // Number of file descriptors - Hardcoded to POLLIN (1)
+} MCast;
 
-mcast_t *multicast_init(char *mcast_addr, int sport, int rport);
-int multicast_send(mcast_t *m, void *msg, int msglen);
-void multicast_setup_recv(mcast_t *m);
-int multicast_receive(mcast_t *m, void *buf, int bufsize);
-int multicast_check_receive(mcast_t *m);
-void multicast_destroy(mcast_t *m);
+MCast *multicast_init(char *mcast_addr, int sport, int rport);
+int multicast_send(MCast *m, void *msg, int msglen);
+void multicast_setup_recv(MCast *m);
+int multicast_receive(MCast *m, void *buf, int bufsize);
+int multicast_check_receive(MCast *m);
+void multicast_destroy(MCast *m);
 
 #endif

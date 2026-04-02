@@ -1,4 +1,3 @@
-#include <time.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -6,9 +5,9 @@
 #include <strings.h>
 #include "multicast.h"
 
-mcast_t *multicast_init(char *mcast_addr, int sport, int rport)
+MCast *multicast_init(char *mcast_addr, int sport, int rport)
 {
-    mcast_t *m = (mcast_t *)calloc(1, sizeof(mcast_t));
+    MCast *m = (MCast *)calloc(1, sizeof(MCast));
 
     m->sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (m->sock < 0)
@@ -42,7 +41,7 @@ mcast_t *multicast_init(char *mcast_addr, int sport, int rport)
     return m;
 }
 
-int multicast_send(mcast_t *m, void *msg, int msglen)
+int multicast_send(MCast *m, void *msg, int msglen)
 {
     int cnt = sendto(m->sock, msg, msglen, 0, (struct sockaddr *)&(m->addr), m->addrlen);
     if (cnt < 0)
@@ -53,7 +52,7 @@ int multicast_send(mcast_t *m, void *msg, int msglen)
     return cnt;
 }
 
-void multicast_setup_recv(mcast_t *m)
+void multicast_setup_recv(MCast *m)
 {
     if (bind(m->sock, (struct sockaddr *)&(m->my_addr), sizeof(m->my_addr)) < 0)
     {
@@ -67,7 +66,7 @@ void multicast_setup_recv(mcast_t *m)
     }
 }
 
-int multicast_receive(mcast_t *m, void *buf, int bufsize)
+int multicast_receive(MCast *m, void *buf, int bufsize)
 {
     int cnt = recvfrom(m->sock, buf, bufsize, 0, (struct sockaddr *)&(m->my_addr), &(m->my_addrlen));
     if (cnt < 0)
@@ -78,7 +77,8 @@ int multicast_receive(mcast_t *m, void *buf, int bufsize)
     return cnt;
 }
 
-int multicast_check_receive(mcast_t *m)
+// Non blocking, CPU efficient receive check
+int multicast_check_receive(MCast *m)
 {
 
     int rc = poll(m->fds, m->nfds, 1000);
@@ -89,7 +89,7 @@ int multicast_check_receive(mcast_t *m)
     return rc;
 }
 
-void multicast_destroy(mcast_t *m)
+void multicast_destroy(MCast *m)
 {
     close(m->sock);
     free(m);
