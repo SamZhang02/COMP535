@@ -3,3 +3,7 @@ out
 .jar
 */target/
 *.zip
+
+sender
+receiver
+
