@@ -5,7 +5,11 @@
 #include <strings.h>
 #include "multicast.h"
 
-MCast *multicast_init(char *mcast_addr, int sport, int rport)
+MCast *multicast_init(
+    char *mcast_addr, 
+    int sport,  // Sender Port
+    int rport // Receiver Port
+)
 {
     MCast *m = (MCast *)calloc(1, sizeof(MCast));
 
