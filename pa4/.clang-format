@@ -1,0 +1,16 @@
+---
+# The character limit for a single line
+ColumnLimit: 80
+
+# When true, parameters are packed side-by-side. 
+# Set to false to force one-per-line if they wrap.
+BinPackParameters: false
+
+# Similar setting for function calls (arguments)
+BinPackArguments: false
+
+# Ensures the first parameter starts on a new line if the list wraps
+AllowAllParametersOfDeclarationOnNextLine: true
+
+# Alignment style for the wrapped parameters
+---
