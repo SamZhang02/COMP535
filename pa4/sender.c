@@ -18,28 +18,7 @@
 #define USAGE "Usage: %s [-c chunk_size] <file1> <file2> ...\n"
 #define DEFAULT_CHUNK_SIZE 1024
 
-static void handle_nack_packet(const unsigned char *buf, int received) {
-  if (received < (int)sizeof(NackPacket)) {
-    log_info("  nack packet too short (%d bytes)\n", received);
-    return;
-  }
-
-  const NackPacket *pkt = (const NackPacket *)buf;
-  log_info(" Received NACK: file_id=%u, missing_seq_range=[%u,%u]\n",
-           pkt->file_id,
-           pkt->missing_seq_num_start,
-           pkt->missing_seq_num_end);
-
-  // TODO: generate data packet
-}
-
-static void handle_packet(const unsigned char *buf, int received) {
-  const PacketHeader *hdr = (const PacketHeader *)buf;
-
-  if (hdr->type == PKT_TYPE_NACK) {
-    handle_nack_packet(buf, received);
-  }
-}
+#define CYCLE_LENGTH_SECONDS 3
 
 DataPacket *generate_data_packet(MetadataPacket file_catalog[],
                                  uint16_t file_id,
@@ -81,6 +60,65 @@ DataPacket *generate_data_packet(MetadataPacket file_catalog[],
 
   fclose(fp);
   return pkt;
+}
+
+static void handle_nack_packet(const unsigned char *buf,
+                               int received,
+                               MetadataPacket file_catalog[],
+                               int num_files,
+                               MCast *mcast,
+                               int chunk_size) {
+  if (received < (int)sizeof(NackPacket)) {
+    log_info("  nack packet too short (%d bytes)\n", received);
+    return;
+  }
+
+  const NackPacket *pkt = (const NackPacket *)buf;
+  log_info(" Received NACK: file_id=%u, missing_seq_range=[%u,%u]\n",
+           pkt->file_id,
+           pkt->missing_seq_num_start,
+           pkt->missing_seq_num_end);
+
+  uint16_t file_id = pkt->file_id;
+  uint32_t missing_seq_num_start = pkt->missing_seq_num_start;
+  uint32_t missing_seq_num_end = pkt->missing_seq_num_end;
+
+  // This works under the assumption that file ids are sequential, which is true
+  // in our sender protocol in main()
+  if (file_id >= num_files) {
+    fprintf(stderr, "Received NACK for file not in catalog, id=%u\n", file_id);
+    return;
+  }
+
+  MetadataPacket file_to_resend = file_catalog[file_id];
+  for (uint32_t i = missing_seq_num_start; i <= missing_seq_num_end; i++) {
+    if (i >= file_to_resend.num_chunks) {
+      fprintf(stderr, "File with id=%u does not have chunk=%u\n", file_id, i);
+      continue;
+    }
+
+    DataPacket *data_packet =
+        generate_data_packet(file_catalog, file_id, i, chunk_size);
+    int size = sizeof(DataPacket) + data_packet->header.payload_size;
+
+    multicast_send(mcast, data_packet, size);
+  }
+}
+
+static void handle_packet(const unsigned char *buf,
+                          int received,
+                          MetadataPacket file_catalog[],
+                          int num_files,
+                          MCast *mcast,
+                          int chunk_size
+
+) {
+  const PacketHeader *hdr = (const PacketHeader *)buf;
+
+  if (hdr->type == PKT_TYPE_NACK) {
+    handle_nack_packet(
+        buf, received, file_catalog, num_files, mcast, chunk_size);
+  }
 }
 
 int main(int argc, char *argv[]) {
@@ -189,13 +227,14 @@ int main(int argc, char *argv[]) {
         continue;
       } else {
         // TODO: Use a worker thread for this
-        handle_packet(buf, received);
+        handle_packet(
+            buf, received, file_catalog, num_files, mcast, chunk_size);
       }
     }
 
     time_t current_time = time(NULL);
     // Cyclical control packet
-    if (current_time - last_send_time >= 3) {
+    if (current_time - last_send_time >= CYCLE_LENGTH_SECONDS) {
       log_info("Sending cyclical control packet.\n");
       for (int i = 0; i < num_files; i++) {
         multicast_send(mcast, &file_catalog[i], sizeof(MetadataPacket));
