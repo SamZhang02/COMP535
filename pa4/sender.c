@@ -1,14 +1,45 @@
 #include "checksum.h"
+#include "logging.h"
 #include "multicast.h"
 #include "protocol.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
+
+#define MCAST_ADDR "239.0.0.1"
+#define SENDER_PORT 5000
+#define RECEIVER_PORT 5000
+
+#define RECV_BUF_SIZE 65535
 
 #define USAGE "Usage: %s [-c chunk_size] <file1> <file2> ...\n"
 #define DEFAULT_CHUNK_SIZE 1024
+
+static void handle_nack_packet(const unsigned char *buf, int received) {
+  if (received < (int)sizeof(NackPacket)) {
+    log_info("  nack packet too short (%d bytes)\n", received);
+    return;
+  }
+
+  const NackPacket *pkt = (const NackPacket *)buf;
+  log_info(" Received NACK: file_id=%u, missing_seq_range=[%u,%u]\n",
+           pkt->file_id,
+           pkt->missing_seq_num_start,
+           pkt->missing_seq_num_end);
+
+  // TODO: generate data packet
+}
+
+static void handle_packet(const unsigned char *buf, int received) {
+  const PacketHeader *hdr = (const PacketHeader *)buf;
+
+  if (hdr->type == PKT_TYPE_NACK) {
+    handle_nack_packet(buf, received);
+  }
+}
 
 DataPacket *generate_data_packet(MetadataPacket file_catalog[],
                                  uint16_t file_id,
@@ -114,7 +145,10 @@ int main(int argc, char *argv[]) {
     file_catalog[file_index].filename[MAX_FILENAME_LENGTH - 1] = '\0';
   }
 
-  MCast *mcast = multicast_init("239.0.0.1", 5000, 5000);
+  MCast *mcast = multicast_init(MCAST_ADDR, SENDER_PORT, RECEIVER_PORT);
+  multicast_setup_recv(mcast);
+
+  log_info("Sender listening on %s:%u\n", MCAST_ADDR, RECEIVER_PORT);
 
   for (int i = 0; i < num_files; i++) {
     multicast_send(mcast, &file_catalog[i], sizeof(MetadataPacket));
@@ -127,16 +161,50 @@ int main(int argc, char *argv[]) {
           file_catalog, fileMetadata.file_id, j, chunk_size);
       size_t size = sizeof(DataPacket) + data_packet->header.payload_size;
 
-      printf("Sending data packet, file_id=%u, seq_num=%u, "
-             "payload_size=%zubytes\n",
-             data_packet->file_id,
-             data_packet->seq_num,
-             size);
+      log_info("Sending data packet, file_id=%u, seq_num=%u, "
+               "payload_size=%zubytes\n",
+               data_packet->file_id,
+               data_packet->seq_num,
+               size);
 
       multicast_send(mcast, data_packet, size);
 
       free(data_packet);
     }
+  }
+
+  time_t last_send_time = time(NULL);
+  while (1) {
+    unsigned char buf[RECV_BUF_SIZE];
+
+    // this  blocks here for at most 1 second, then
+    // goes to the rest of the content
+    int received_packet = multicast_check_receive(mcast);
+
+    if (received_packet) {
+      int received = multicast_receive(mcast, buf, sizeof(buf));
+
+      if (received < (int)sizeof(PacketHeader)) {
+        log_info("Received short packet (%d bytes)\n", received);
+        continue;
+      } else {
+        // TODO: Use a worker thread for this
+        handle_packet(buf, received);
+      }
+    }
+
+    time_t current_time = time(NULL);
+    // Cyclical control packet
+    if (current_time - last_send_time >= 3) {
+      log_info("Sending cyclical control packet.\n");
+      for (int i = 0; i < num_files; i++) {
+        multicast_send(mcast, &file_catalog[i], sizeof(MetadataPacket));
+      }
+
+      last_send_time = current_time;
+    }
+
+    fflush(stdout);
   }
 
   multicast_destroy(mcast);
