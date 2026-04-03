@@ -46,7 +46,7 @@ int multicast_send(MCast *m, void *msg, int msglen) {
   int cnt = sendto(
       m->sock, msg, msglen, 0, (struct sockaddr *)&(m->addr), m->addrlen);
   if (cnt < 0) {
-    perror("sendto:");
+    perror("sendto");
     exit(1);
   }
   return cnt;
