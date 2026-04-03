@@ -1,4 +1,5 @@
 #include "checksum.h"
+#include "logging.h"
 #include "multicast.h"
 #include "protocol.h"
 
@@ -48,12 +49,13 @@ static void handle_data_packet(const unsigned char *buf, int received) {
 
   size_t header_size = offsetof(DataPacket, payload);
   size_t payload_len = received - header_size;
-  //
+
   int checksum_ok = checksum_decode(pkt, payload_len);
+
   printf("  data: file_id=%u, seq=%u, checksum=%s(%u)\n",
          pkt->file_id,
          pkt->seq_num,
-         checksum_ok ? "valid" : "invalid",
+         checksum_ok ? "VALID" : "INVALID",
          pkt->checksum);
 
 #if DEBUG
@@ -61,6 +63,10 @@ static void handle_data_packet(const unsigned char *buf, int received) {
   fwrite(pkt->payload, 1, payload_len, stdout);
   printf("\n");
 #endif
+
+  if (checksum_ok) {
+    // TODO: Write on arrival
+  }
 }
 
 static void handle_nack_packet(const unsigned char *buf, int received) {
@@ -70,9 +76,10 @@ static void handle_nack_packet(const unsigned char *buf, int received) {
   }
 
   const NackPacket *pkt = (const NackPacket *)buf;
-  printf("  nack: file_id=%u, missing_seq=%u\n",
+  printf("  nack: file_id=%u, missing_seq_range=[%u,%u]\n",
          pkt->file_id,
-         pkt->missing_seq_num);
+         pkt->missing_seq_num_start,
+         pkt->missing_seq_num_end);
 }
 
 static void handle_packet(const unsigned char *buf, int received) {
@@ -85,7 +92,8 @@ static void handle_packet(const unsigned char *buf, int received) {
     handle_data_packet(buf, received);
     break;
   case PKT_TYPE_NACK:
-    handle_nack_packet(buf, received);
+    // TODO:
+    // handle_nack_packet(buf, received);
     break;
   default:
     printf("  no handler for packet type=%d\n", hdr->type);
@@ -99,21 +107,21 @@ int main(void) {
   MCast *mcast = multicast_init(MCAST_ADDR, SENDER_PORT, RECEIVER_PORT);
   multicast_setup_recv(mcast);
 
-  printf("Receiver listening on %s:%d\n", MCAST_ADDR, RECEIVER_PORT);
+  log_info("Receiver listening on %s:%d\n", MCAST_ADDR, RECEIVER_PORT);
 
   while (1) {
     int received = multicast_receive(mcast, buf, sizeof(buf));
     if (received < (int)sizeof(PacketHeader)) {
-      printf("Received short packet (%d bytes)\n", received);
+      log_info("Received short packet (%d bytes)\n", received);
       continue;
     }
 
     PacketHeader *hdr = (PacketHeader *)buf;
-    printf("Received packet: type=%s (%d), bytes=%d, payload_size=%u\n",
-           packet_type_to_string(hdr->type),
-           hdr->type,
-           received,
-           hdr->payload_size);
+    log_info("Received packet: type=%s (%d), bytes=%d, payload_size=%u\n",
+             packet_type_to_string(hdr->type),
+             hdr->type,
+             received,
+             hdr->payload_size);
     handle_packet(buf, received);
 
     fflush(stdout);
