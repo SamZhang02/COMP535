@@ -21,6 +21,8 @@ typedef struct {
   // implosion with other receivers
   uint8_t wait_data;
   uint64_t wait_until_ms;
+  uint64_t last_data_ms;
+  uint64_t next_nack_at_ms;
 } FileTracker;
 
 FileTracker *filetracker_init(uint32_t file_id,
@@ -37,9 +39,9 @@ int filetracker_write_chunk(FileTracker *ft,
                             uint32_t chunk_index,
                             const char *payload,
                             uint32_t payload_len);
+const char *filetracker_tostring(const FileTracker *ft);
 uint64_t filetracker_now_ms(void);
 int filetracker_is_waiting(const FileTracker *ft);
 void filetracker_maybe_expire_wait(FileTracker *ft);
-void filetracker_on_first_data(FileTracker *ft);
 
 #endif

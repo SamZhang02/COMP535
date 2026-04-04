@@ -1,4 +1,5 @@
 #include "dlist.h"
+#include <stdio.h>
 #include <stdlib.h>
 
 static DListNode *dlist_node_create(void *data) {
@@ -211,4 +212,20 @@ void dlist_foreach(DList *list, dlist_iter_fn iter_fn, void *ctx) {
 
   for (DListNode *node = list->head; node; node = node->next)
     iter_fn(node->data, ctx);
+}
+
+const char *dlist_tostring(const DList *list) {
+  static char buf[160];
+  if (!list) {
+    snprintf(buf, sizeof(buf), "DList{null}");
+    return buf;
+  }
+
+  snprintf(buf,
+           sizeof(buf),
+           "DList{size=%zu, head=%p, tail=%p}",
+           list->size,
+           (void *)list->head,
+           (void *)list->tail);
+  return buf;
 }

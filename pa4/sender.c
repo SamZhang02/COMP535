@@ -2,6 +2,7 @@
 #include "logging.h"
 #include "multicast.h"
 #include "protocol.h"
+#include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,6 +20,14 @@
 #define DEFAULT_CHUNK_SIZE 1024
 
 #define CYCLE_LENGTH_SECONDS 3
+#define SEND_PACE_US 1U
+
+static volatile sig_atomic_t keep_running = 1;
+
+static void handle_sigint(int signum) {
+  (void)signum;
+  keep_running = 0;
+}
 
 DataPacket *generate_data_packet(MetadataPacket file_catalog[],
                                  uint16_t file_id,
@@ -99,9 +108,26 @@ static void handle_nack_packet(const unsigned char *buf,
 
     DataPacket *data_packet =
         generate_data_packet(file_catalog, file_id, i, chunk_size);
-    int size = sizeof(DataPacket) + data_packet->header.payload_size;
+
+    if (!data_packet) {
+      continue;
+    }
+
+    size_t size = sizeof(DataPacket) + data_packet->header.payload_size;
+
+    log_info("Sending data packet, file_id=%u, seq_num=%u, "
+             "payload_size=%zubytes\n",
+             data_packet->file_id,
+             data_packet->seq_num,
+             size);
 
     multicast_send(mcast, data_packet, size);
+
+    free(data_packet);
+
+    // Since we might send a lot of packets at once, we add a small delay
+    // between each send
+    usleep(SEND_PACE_US);
   }
 }
 
@@ -122,6 +148,8 @@ static void handle_packet(const unsigned char *buf,
 }
 
 int main(int argc, char *argv[]) {
+  signal(SIGINT, handle_sigint);
+
   int chunk_size = DEFAULT_CHUNK_SIZE;
   int opt;
 
@@ -177,6 +205,7 @@ int main(int argc, char *argv[]) {
 
     file_catalog[file_index].num_chunks =
         (file_size + chunk_size - 1) / chunk_size;
+    file_catalog[file_index].chunk_size = (uint32_t)chunk_size;
 
     strncpy(
         file_catalog[file_index].filename, filename, MAX_FILENAME_LENGTH - 1);
@@ -189,6 +218,7 @@ int main(int argc, char *argv[]) {
   log_info("Sender listening on %s:%u\n", MCAST_ADDR, RECEIVER_PORT);
 
   for (int i = 0; i < num_files; i++) {
+    log_info("Sending metadata packet, file_id=%u\n", file_catalog[i].file_id);
     multicast_send(mcast, &file_catalog[i], sizeof(MetadataPacket));
   }
 
@@ -197,6 +227,9 @@ int main(int argc, char *argv[]) {
     for (uint32_t j = 0; j < fileMetadata.num_chunks; j++) {
       DataPacket *data_packet = generate_data_packet(
           file_catalog, fileMetadata.file_id, j, chunk_size);
+      if (!data_packet) {
+        continue;
+      }
       size_t size = sizeof(DataPacket) + data_packet->header.payload_size;
 
       log_info("Sending data packet, file_id=%u, seq_num=%u, "
@@ -208,19 +241,32 @@ int main(int argc, char *argv[]) {
       multicast_send(mcast, data_packet, size);
 
       free(data_packet);
+
+      usleep(SEND_PACE_US);
     }
   }
 
   time_t last_send_time = time(NULL);
-  while (1) {
+  while (keep_running) {
     unsigned char buf[RECV_BUF_SIZE];
 
     // this  blocks here for at most 1 second, then
     // goes to the rest of the content
     int received_packet = multicast_check_receive(mcast);
+    if (received_packet < 0) {
+      if (!keep_running)
+        break;
+      continue;
+    }
 
     if (received_packet) {
       int received = multicast_receive(mcast, buf, sizeof(buf));
+
+      if (received < 0) {
+        if (!keep_running)
+          break;
+        continue;
+      }
 
       if (received < (int)sizeof(PacketHeader)) {
         log_info("Received short packet (%d bytes)\n", received);
@@ -246,6 +292,7 @@ int main(int argc, char *argv[]) {
     fflush(stdout);
   }
 
+  log_info("Sender shutting down.\n");
   multicast_destroy(mcast);
   return 0;
 }

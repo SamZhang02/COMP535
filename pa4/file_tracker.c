@@ -73,8 +73,11 @@ FileTracker *filetracker_init(uint32_t file_id,
   }
 
   ft->wait_data = 1;
-  ft->wait_until_ms = filetracker_now_ms() + STARTUP_GRACE_MS +
-                      (uint64_t)(rand() % (STARTUP_JITTER_MS + 1));
+  uint64_t now_ms = filetracker_now_ms();
+  ft->wait_until_ms =
+      now_ms + STARTUP_GRACE_MS + (uint64_t)(rand() % (STARTUP_JITTER_MS + 1));
+  ft->last_data_ms = now_ms;
+  ft->next_nack_at_ms = ft->wait_until_ms;
 
   return ft;
 }
@@ -119,6 +122,32 @@ int filetracker_write_chunk(FileTracker *ft,
   return 1;
 }
 
+const char *filetracker_tostring(const FileTracker *ft) {
+  static char buf[320];
+  if (!ft) {
+    snprintf(buf, sizeof(buf), "FileTracker{null}");
+    return buf;
+  }
+
+  snprintf(buf,
+           sizeof(buf),
+           "FileTracker{id=%u, file='%s', size=%u, chunks=%u, got=%u, "
+           "chunk_size=%u, wait_data=%u, wait_until_ms=%llu, "
+           "last_data_ms=%llu, next_nack_at_ms=%llu, fp=%p}",
+           ft->file_id,
+           ft->filename,
+           ft->file_size,
+           ft->total_chunks,
+           ft->chunks_received,
+           ft->chunk_size,
+           (unsigned int)ft->wait_data,
+           (unsigned long long)ft->wait_until_ms,
+           (unsigned long long)ft->last_data_ms,
+           (unsigned long long)ft->next_nack_at_ms,
+           (void *)ft->fp);
+  return buf;
+}
+
 int is_file_complete(FileTracker *ft) {
   return ft->chunks_received == ft->total_chunks;
 }
@@ -135,12 +164,6 @@ void filetracker_maybe_expire_wait(FileTracker *ft) {
 
   if (filetracker_now_ms() >= ft->wait_until_ms)
     ft->wait_data = 0;
-}
-
-void filetracker_on_first_data(FileTracker *ft) {
-  if (!ft)
-    return;
-  ft->wait_data = 0;
 }
 
 void filetracker_destroy(FileTracker *ft) {
