@@ -7,3 +7,7 @@ out
 sender
 receiver
 
+received_files/
+
+*.o
+
