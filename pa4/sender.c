@@ -20,7 +20,7 @@
 #define DEFAULT_CHUNK_SIZE 1024
 
 #define CYCLE_LENGTH_SECONDS 3
-#define SEND_PACE_US 1U
+#define SEND_PACE_US 0U
 
 static volatile sig_atomic_t keep_running = 1;
 
@@ -279,9 +279,8 @@ int main(int argc, char *argv[]) {
     }
 
     time_t current_time = time(NULL);
-    // Cyclical control packet
     if (current_time - last_send_time >= CYCLE_LENGTH_SECONDS) {
-      log_info("Sending cyclical control packet.\n");
+      log_info("Sending cyclical control packets.\n");
       for (int i = 0; i < num_files; i++) {
         multicast_send(mcast, &file_catalog[i], sizeof(MetadataPacket));
       }
