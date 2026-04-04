@@ -1,4 +1,5 @@
 #include "multicast.h"
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -73,8 +74,11 @@ int multicast_receive(MCast *m, void *buf, int bufsize) {
                      (struct sockaddr *)&(m->my_addr),
                      &(m->my_addrlen));
   if (cnt < 0) {
+    if (errno == EINTR) {
+      return -1;
+    }
     perror("recvfrom");
-    exit(1);
+    return -1;
   }
   return cnt;
 }
@@ -84,8 +88,11 @@ int multicast_check_receive(MCast *m) {
 
   int rc = poll(m->fds, m->nfds, 1000);
   if (rc < 0) {
+    if (errno == EINTR) {
+      return -1;
+    }
     perror("poll");
-    exit(1);
+    return -1;
   }
   return rc;
 }
