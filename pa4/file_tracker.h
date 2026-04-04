@@ -16,6 +16,9 @@ typedef struct {
   uint32_t chunks_received;
   uint8_t *bitmap; // Array of bits: 1 = received, 0 = missing
   FILE *fp;
+
+  // We want to backoff first when we get new file metadata to avoid nack
+  // implosion with other receivers
   uint8_t wait_data;
   uint64_t wait_until_ms;
 } FileTracker;
