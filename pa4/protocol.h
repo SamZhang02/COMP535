@@ -23,6 +23,7 @@ typedef struct __attribute__((packed)) {
   uint32_t file_size;
   uint32_t num_chunks;
   uint32_t chunk_size;
+  uint32_t file_checksum;
   char filename[MAX_FILENAME_LENGTH];
 } MetadataPacket;
 
@@ -30,7 +31,7 @@ typedef struct __attribute__((packed)) {
   PacketHeader header; // type = PKT_TYPE_DATA
   uint16_t file_id;
   uint32_t seq_num; // Chunk id
-  unsigned char checksum;
+  uint32_t checksum;
 
   // size depends on -c flag, malloc sizeof(DataPacket + chunk_size)
   char payload[];
