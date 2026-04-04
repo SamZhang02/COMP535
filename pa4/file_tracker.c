@@ -8,6 +8,8 @@
 #define STARTUP_GRACE_MS 100U
 #define STARTUP_JITTER_MS 150U
 
+static const char *g_output_dir = RECEIVED_FILES_DIR;
+
 // Bitmap operations to save memory
 #define SET_BIT(A, k) (A[(k / 8)] |= (1 << (k % 8)))
 #define CLEAR_BIT(A, k) (A[(k / 8)] &= ~(1 << (k % 8)))
@@ -19,11 +21,20 @@ uint64_t filetracker_now_ms(void) {
   return (uint64_t)ts.tv_sec * 1000ULL + (uint64_t)ts.tv_nsec / 1000000ULL;
 }
 
+void filetracker_set_output_dir(const char *dir) {
+  if (dir && dir[0] != '\0') {
+    g_output_dir = dir;
+    return;
+  }
+  g_output_dir = RECEIVED_FILES_DIR;
+}
+
 FileTracker *filetracker_init(uint32_t file_id,
                               const char *filename,
                               uint32_t total_chunks,
                               uint32_t file_size,
-                              uint32_t chunk_size) {
+                              uint32_t chunk_size,
+                              uint32_t expected_file_checksum) {
   static int rand_seeded = 0;
   if (!rand_seeded) {
     srand((unsigned int)time(NULL));
@@ -39,6 +50,8 @@ FileTracker *filetracker_init(uint32_t file_id,
   ft->total_chunks = total_chunks;
   ft->chunk_size = chunk_size;
   ft->chunks_received = 0;
+  ft->expected_file_checksum = expected_file_checksum;
+  ft->computed_file_checksum = 0;
   size_t num_bytes = (total_chunks + 7) / 8;
   ft->bitmap = NULL;
   if (num_bytes > 0) {
@@ -57,8 +70,7 @@ FileTracker *filetracker_init(uint32_t file_id,
   if (slash && *(slash + 1) != '\0')
     base = slash + 1;
 
-  snprintf(
-      ft->filename, sizeof(ft->filename), "%s/%s", RECEIVED_FILES_DIR, base);
+  snprintf(ft->filename, sizeof(ft->filename), "%s/%s", g_output_dir, base);
   ft->fp = fopen(ft->filename, "wb+");
   if (!ft->fp) {
     free(ft->bitmap);
@@ -119,6 +131,9 @@ int filetracker_write_chunk(FileTracker *ft,
   if (payload_len > 0 && fwrite(payload, 1, payload_len, ft->fp) != payload_len)
     return 0;
 
+  if (fflush(ft->fp) != 0)
+    return 0;
+
   return 1;
 }
 
@@ -132,7 +147,8 @@ const char *filetracker_tostring(const FileTracker *ft) {
   snprintf(buf,
            sizeof(buf),
            "FileTracker{id=%u, file='%s', size=%u, chunks=%u, got=%u, "
-           "chunk_size=%u, wait_data=%u, wait_until_ms=%llu, "
+           "chunk_size=%u, expected_checksum=%u, computed_checksum=%u, "
+           "wait_data=%u, wait_until_ms=%llu, "
            "last_data_ms=%llu, next_nack_at_ms=%llu, fp=%p}",
            ft->file_id,
            ft->filename,
@@ -140,6 +156,8 @@ const char *filetracker_tostring(const FileTracker *ft) {
            ft->total_chunks,
            ft->chunks_received,
            ft->chunk_size,
+           ft->expected_file_checksum,
+           ft->computed_file_checksum,
            (unsigned int)ft->wait_data,
            (unsigned long long)ft->wait_until_ms,
            (unsigned long long)ft->last_data_ms,

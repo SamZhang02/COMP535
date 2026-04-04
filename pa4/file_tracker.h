@@ -14,6 +14,8 @@ typedef struct {
   uint32_t total_chunks;
   uint32_t chunk_size;
   uint32_t chunks_received;
+  uint32_t expected_file_checksum;
+  uint32_t computed_file_checksum;
   uint8_t *bitmap; // Array of bits: 1 = received, 0 = missing
   FILE *fp;
 
@@ -29,7 +31,9 @@ FileTracker *filetracker_init(uint32_t file_id,
                               const char *filename,
                               uint32_t total_chunks,
                               uint32_t file_size,
-                              uint32_t chunk_size);
+                              uint32_t chunk_size,
+                              uint32_t expected_file_checksum);
+void filetracker_set_output_dir(const char *dir);
 void mark_chunk_received(FileTracker *ft, uint32_t chunk_index);
 int is_file_complete(FileTracker *ft);
 void filetracker_destroy(FileTracker *ft);
