@@ -10,6 +10,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -19,6 +20,7 @@
 #define RECV_BUF_SIZE 65535
 #define NACK_IDLE_GAP_MS 200ULL
 #define NACK_FILE_COOLDOWN_MS 500ULL
+#define USAGE "Usage: %s [-d output_dir]\n"
 
 static volatile sig_atomic_t keep_running = 1;
 
@@ -114,11 +116,12 @@ static void handle_metadata_packet(const unsigned char *buf,
 
   const MetadataPacket *pkt = (const MetadataPacket *)buf;
   printf("  metadata: file_id=%u, file_size=%u, chunks=%u, chunk_size=%u, "
-         "filename=%s\n",
+         "file_checksum=%u, filename=%s\n",
          pkt->file_id,
          pkt->file_size,
          pkt->num_chunks,
          pkt->chunk_size,
+         pkt->file_checksum,
          pkt->filename);
 
   // Check file trackers, if does not exist create it
@@ -139,11 +142,13 @@ static void handle_metadata_packet(const unsigned char *buf,
   log_info("Creating tracker for file id=%u, name=%s\n",
            pkt->file_id,
            pkt->filename);
+
   FileTracker *filetracker = filetracker_init(pkt->file_id,
                                               pkt->filename,
                                               pkt->num_chunks,
                                               pkt->file_size,
-                                              pkt->chunk_size);
+                                              pkt->chunk_size,
+                                              pkt->file_checksum);
   if (!filetracker) {
     log_info("Failed to create tracker for file id=%u\n", pkt->file_id);
     return;
@@ -195,12 +200,6 @@ static void handle_data_packet(const unsigned char *buf,
          checksum_ok ? "VALID" : "INVALID",
          pkt->checksum);
 
-#if DEBUG
-  printf("  payload: ");
-  fwrite(pkt->payload, 1, payload_len, stdout);
-  printf("\n");
-#endif
-
   uint32_t lookup_file_id = pkt->file_id;
   DListNode *tracker_node =
       dlist_find(filetrackers, &lookup_file_id, filetracker_cmp_by_id);
@@ -242,10 +241,72 @@ static void handle_data_packet(const unsigned char *buf,
     return;
   }
 
+  uint32_t chunk_checksum =
+      checksum_encode((const unsigned char *)pkt->payload,
+                      pkt->header.payload_size);
+  tracker->computed_file_checksum =
+      checksum_combine(tracker->computed_file_checksum,
+                       chunk_checksum,
+                       pkt->seq_num,
+                       pkt->header.payload_size);
   mark_chunk_received(tracker, pkt->seq_num);
   tracker->last_data_ms = filetracker_now_ms();
 
   if (is_file_complete(tracker)) {
+    if (tracker->computed_file_checksum != tracker->expected_file_checksum) {
+      // If file level validation wrong, re request file
+
+      uint32_t file_id = tracker->file_id;
+      uint32_t total_chunks = tracker->total_chunks;
+      uint32_t file_size = tracker->file_size;
+      uint32_t chunk_size = tracker->chunk_size;
+      uint32_t expected_checksum = tracker->expected_file_checksum;
+      char filename[MAX_FILENAME_LENGTH];
+      strncpy(filename, tracker->filename, sizeof(filename) - 1);
+      filename[sizeof(filename) - 1] = '\0';
+
+      log_info("File checksum mismatch: file_id=%u name=%s expected=%u "
+               "computed=%u. Reinitializing tracker.\n",
+               file_id,
+               filename,
+               expected_checksum,
+               tracker->computed_file_checksum);
+
+      filetracker_destroy(tracker);
+
+      FileTracker *replacement = filetracker_init(file_id,
+                                                  filename,
+                                                  total_chunks,
+                                                  file_size,
+                                                  chunk_size,
+                                                  expected_checksum);
+      if (!replacement) {
+        log_info("Failed to reinitialize tracker after checksum mismatch, "
+                 "removing tracker for file_id=%u\n",
+                 file_id);
+        tracker_node->data = NULL;
+        (void)dlist_remove_node(filetrackers, tracker_node);
+        return;
+      }
+
+      tracker_node->data = replacement;
+      return;
+    }
+
+    // Ensure on-disk content is durable and visible before declaring complete.
+    if (fflush(tracker->fp) != 0) {
+      log_info("Failed to flush completed file: file_id=%u name=%s\n",
+               tracker->file_id,
+               tracker->filename);
+      return;
+    }
+    if (fsync(fileno(tracker->fp)) != 0) {
+      log_info("Failed to fsync completed file: file_id=%u name=%s\n",
+               tracker->file_id,
+               tracker->filename);
+      return;
+    }
+
     log_info("File complete: file_id=%u name=%s\n",
              tracker->file_id,
              tracker->filename);
@@ -274,14 +335,32 @@ static void filetracker_free_void(void *data) {
   filetracker_destroy((FileTracker *)data);
 }
 
-int main(void) {
+int main(int argc, char *argv[]) {
   signal(SIGINT, handle_sigint);
 
-  unsigned char buf[RECV_BUF_SIZE];
+  const char *output_dir = RECEIVED_FILES_DIR;
+  int opt;
+  while ((opt = getopt(argc, argv, "d:")) != -1) {
+    switch (opt) {
+    case 'd':
+      output_dir = optarg;
+      break;
+    default:
+      fprintf(stderr, USAGE, argv[0]);
+      return 1;
+    }
+  }
 
-  // hardcoded path given assignment instructions
-  if (mkdir("received_files", 0755) != 0 && errno != EEXIST) {
-    perror("mkdir received_files");
+  if (optind < argc) {
+    fprintf(stderr, USAGE, argv[0]);
+    return 1;
+  }
+
+  unsigned char buf[RECV_BUF_SIZE];
+  filetracker_set_output_dir(output_dir);
+
+  if (mkdir(output_dir, 0755) != 0 && errno != EEXIST) {
+    fprintf(stderr, "mkdir %s failed: %s\n", output_dir, strerror(errno));
     return 1;
   }
 
@@ -291,6 +370,7 @@ int main(void) {
   multicast_setup_recv(mcast);
 
   log_info("Receiver listening on %s:%d\n", MCAST_ADDR, RECEIVER_PORT);
+  log_info("Saving received files to: %s\n", output_dir);
 
   while (keep_running) {
     int ready = multicast_check_receive(mcast);
