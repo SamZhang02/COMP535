@@ -10,6 +10,8 @@ typedef uint8_t PacketType;
 #define PKT_TYPE_DATA 1
 #define PKT_TYPE_NACK 2
 
+const char *packet_type_to_string(PacketType type);
+
 typedef struct __attribute__((packed)) {
   uint32_t payload_size; // Size of the payload ONLY
   PacketType type;
@@ -20,6 +22,7 @@ typedef struct __attribute__((packed)) {
   uint32_t file_id;
   uint32_t file_size;
   uint32_t num_chunks;
+  uint32_t chunk_size;
   char filename[MAX_FILENAME_LENGTH];
 } MetadataPacket;
 
