@@ -37,6 +37,7 @@ DListNode *dlist_insert_before(DList *list, DListNode *node, void *data);
 void *dlist_remove_node(DList *list, DListNode *node);
 
 DListNode *dlist_find(const DList *list, const void *key, dlist_cmp_fn cmp_fn);
+int dlist_contains(const DList *list, const void *key, dlist_cmp_fn cmp_fn);
 void dlist_foreach(DList *list, dlist_iter_fn iter_fn, void *ctx);
 
 #endif

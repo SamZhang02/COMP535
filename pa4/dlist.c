@@ -201,6 +201,10 @@ DListNode *dlist_find(const DList *list, const void *key, dlist_cmp_fn cmp_fn) {
   return NULL;
 }
 
+int dlist_contains(const DList *list, const void *key, dlist_cmp_fn cmp_fn) {
+  return dlist_find(list, key, cmp_fn) != NULL;
+}
+
 void dlist_foreach(DList *list, dlist_iter_fn iter_fn, void *ctx) {
   if (!list || !iter_fn)
     return;
