@@ -277,7 +277,6 @@ int main(int argc, char *argv[]) {
         log_info("Received short packet (%d bytes)\n", received);
         continue;
       } else {
-        // TODO: Use a worker thread for this
         handle_packet(
             buf, received, file_catalog, num_files, mcast, chunk_size);
       }

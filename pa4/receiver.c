@@ -286,7 +286,7 @@ static void handle_data_packet(const unsigned char *buf,
   tracker->last_data_ms = filetracker_now_ms();
 
   if (is_file_complete(tracker)) {
-    // Ensure all assembled bytes are durable before whole-file validation.
+    // Flush file to disk first
     if (fflush(tracker->fp) != 0) {
       log_info("Failed to flush completed file: file_id=%u name=%s\n",
                tracker->file_id,
