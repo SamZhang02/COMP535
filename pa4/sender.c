@@ -29,31 +29,8 @@ static void handle_sigint(int signum) {
   keep_running = 0;
 }
 
-static uint32_t compute_file_checksum(const char *filename, int chunk_size) {
-  FILE *fp = fopen(filename, "rb");
-  if (!fp) {
-    return 0;
-  }
-
-  unsigned char *buf = malloc((size_t)chunk_size);
-  if (!buf) {
-    fclose(fp);
-    return 0;
-  }
-
-  uint32_t checksum = 0;
-  uint32_t seq_num = 0;
-  size_t bytes_read = 0;
-  while ((bytes_read = fread(buf, 1, (size_t)chunk_size, fp)) > 0) {
-    uint32_t chunk_checksum = checksum_encode(buf, bytes_read);
-    checksum = checksum_combine(
-        checksum, chunk_checksum, seq_num, (uint32_t)bytes_read);
-    seq_num++;
-  }
-
-  free(buf);
-  fclose(fp);
-  return checksum;
+static uint32_t compute_file_checksum(const char *filename) {
+  return checksum_file_path(filename);
 }
 
 DataPacket *generate_data_packet(MetadataPacket file_catalog[],
@@ -233,8 +210,7 @@ int main(int argc, char *argv[]) {
     file_catalog[file_index].num_chunks =
         (file_size + chunk_size - 1) / chunk_size;
     file_catalog[file_index].chunk_size = (uint32_t)chunk_size;
-    file_catalog[file_index].file_checksum =
-        compute_file_checksum(filename, chunk_size);
+    file_catalog[file_index].file_checksum = compute_file_checksum(filename);
 
     strncpy(
         file_catalog[file_index].filename, filename, MAX_FILENAME_LENGTH - 1);

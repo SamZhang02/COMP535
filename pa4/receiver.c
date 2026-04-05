@@ -8,9 +8,9 @@
 #include <errno.h>
 #include <signal.h>
 #include <stddef.h>
-#include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
@@ -111,6 +111,18 @@ send_missing_chunk_nacks(FileTracker *tracker, MCast *mcast, uint64_t now_ms) {
   }
 }
 
+static void send_pending_nacks(DList *filetrackers, MCast *mcast) {
+  if (!filetrackers || !mcast) {
+    return;
+  }
+
+  uint64_t now_ms = filetracker_now_ms();
+  for (DListNode *node = filetrackers->head; node; node = node->next) {
+    FileTracker *tracker = (FileTracker *)node->data;
+    send_missing_chunk_nacks(tracker, mcast, now_ms);
+  }
+}
+
 static void handle_nack_packet(const unsigned char *buf,
                                int received,
                                DList *filetrackers) {
@@ -144,6 +156,7 @@ static void handle_metadata_packet(const unsigned char *buf,
                                    int received,
                                    DList *filetrackers,
                                    MCast *mcast) {
+  (void)mcast;
   if (received < (int)sizeof(MetadataPacket)) {
     printf("  metadata packet too short (%d bytes)\n", received);
     return;
@@ -165,12 +178,6 @@ static void handle_metadata_packet(const unsigned char *buf,
       dlist_contains(filetrackers, &file_id, filetracker_cmp_by_id);
 
   if (alreadyTracking) {
-    DListNode *tracker_node =
-        dlist_find(filetrackers, &file_id, filetracker_cmp_by_id);
-    if (tracker_node) {
-      FileTracker *tracker = (FileTracker *)tracker_node->data;
-      send_missing_chunk_nacks(tracker, mcast, filetracker_now_ms());
-    }
     return;
   }
 
@@ -200,7 +207,6 @@ static void handle_metadata_packet(const unsigned char *buf,
       pkt->file_id,
       pkt->filename,
       filetracker->wait_until_ms);
-  send_missing_chunk_nacks(filetracker, mcast, filetracker_now_ms());
 }
 
 static void handle_data_packet(const unsigned char *buf,
@@ -276,20 +282,27 @@ static void handle_data_packet(const unsigned char *buf,
     return;
   }
 
-  uint32_t chunk_checksum =
-      checksum_encode((const unsigned char *)pkt->payload,
-                      pkt->header.payload_size);
-  tracker->computed_file_checksum =
-      checksum_combine(tracker->computed_file_checksum,
-                       chunk_checksum,
-                       pkt->seq_num,
-                       pkt->header.payload_size);
   mark_chunk_received(tracker, pkt->seq_num);
   tracker->last_data_ms = filetracker_now_ms();
 
   if (is_file_complete(tracker)) {
+    // Ensure all assembled bytes are durable before whole-file validation.
+    if (fflush(tracker->fp) != 0) {
+      log_info("Failed to flush completed file: file_id=%u name=%s\n",
+               tracker->file_id,
+               tracker->filename);
+      return;
+    }
+    if (fsync(fileno(tracker->fp)) != 0) {
+      log_info("Failed to fsync completed file: file_id=%u name=%s\n",
+               tracker->file_id,
+               tracker->filename);
+      return;
+    }
+
+    tracker->computed_file_checksum = checksum_file_path(tracker->filename);
     if (tracker->computed_file_checksum != tracker->expected_file_checksum) {
-      // If file level validation wrong, re request file
+      // If whole-file validation fails, request the entire file again.
 
       uint32_t file_id = tracker->file_id;
       uint32_t total_chunks = tracker->total_chunks;
@@ -325,20 +338,6 @@ static void handle_data_packet(const unsigned char *buf,
       }
 
       tracker_node->data = replacement;
-      return;
-    }
-
-    // Ensure on-disk content is durable and visible before declaring complete.
-    if (fflush(tracker->fp) != 0) {
-      log_info("Failed to flush completed file: file_id=%u name=%s\n",
-               tracker->file_id,
-               tracker->filename);
-      return;
-    }
-    if (fsync(fileno(tracker->fp)) != 0) {
-      log_info("Failed to fsync completed file: file_id=%u name=%s\n",
-               tracker->file_id,
-               tracker->filename);
       return;
     }
 
@@ -412,6 +411,8 @@ int main(int argc, char *argv[]) {
   log_info("Saving received files to: %s\n", output_dir);
 
   while (keep_running) {
+    send_pending_nacks(filetrackers, mcast);
+
     int ready = multicast_check_receive(mcast);
 
     if (ready < 0) {

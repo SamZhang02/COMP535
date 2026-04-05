@@ -5,8 +5,8 @@
 #include <time.h>
 #include <unistd.h>
 
-#define STARTUP_GRACE_MS 100U
-#define STARTUP_JITTER_MS 150U
+#define STARTUP_GRACE_MS 500U
+#define STARTUP_JITTER_MS 2500U
 
 static const char *g_output_dir = RECEIVED_FILES_DIR;
 
@@ -37,7 +37,11 @@ FileTracker *filetracker_init(uint32_t file_id,
                               uint32_t expected_file_checksum) {
   static int rand_seeded = 0;
   if (!rand_seeded) {
-    srand((unsigned int)time(NULL));
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    unsigned int seed = (unsigned int)time(NULL) ^ (unsigned int)getpid() ^
+                        (unsigned int)ts.tv_nsec;
+    srand(seed);
     rand_seeded = 1;
   }
 

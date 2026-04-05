@@ -11,5 +11,9 @@ uint32_t checksum_combine(uint32_t running_checksum,
                           uint32_t seq_num,
                           uint32_t payload_len);
 int checksum_decode(const DataPacket *pkt, size_t payload_len);
+uint32_t file_checksum_update(uint32_t running_checksum,
+                              const unsigned char *payload,
+                              size_t payload_len);
+uint32_t checksum_file_path(const char *path);
 
 #endif
