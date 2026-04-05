@@ -19,34 +19,63 @@
 \section*{Overview}
 
 
- We introduce a Negative Acknowledgement (NACK)-oriented reliable multicast file-sharing protocol that supports full file transfer for both existing receivers and late joiners with low network and host overhead. The sender is effectively stateless and cyclically transmits control packets containing metadata for all files. Receivers are stateful: they track received chunks and request missing chunk ranges using NACK packets. Integrity is verified at two levels: a per-packet chunk checksum during reception and a file-level checksum upon completion. This protocol provides high reliability and fast catch-up for new joiners, but in worst-case receiver-swarm scenarios it can generate substantial repair traffic.
+We introduce a \texttt{NACK}-oriented reliable multicast file-sharing protocol that supports full file transfer for both existing receivers and late joiners with low network and host overhead. The sender is effectively stateless and cyclically transmits control packets with metadata for all files. Receivers are stateful: they track received chunks and request missing chunk ranges through \texttt{NACK} packets. Integrity is checked at two levels: per-chunk during reception and file-level at completion. The protocol gives high reliability and fast catch-up for new joiners, but worst-case receiver swarms can still generate substantial repair traffic.
 
 \section*{Protocol Design}
 
-% Protocl Description, metadata packet, data  packet, NACK packet
+Our protocol uses three UDP multicast packet types: \texttt{METADATA}, \texttt{DATA}, and \texttt{NACK}. All packets share a small header with packet type and payload size. \texttt{METADATA} carries file id, file size, chunk count, chunk size, file checksum, and filename. \texttt{DATA} carries one chunk plus its chunk checksum. \texttt{NACK} carries an inclusive missing-chunk range for repair. The overall model is sender-driven multicast with receiver-driven selective repair.
 
 
 \subsection*{Sender}
 
+Sender has two core responsibilities:
+
+\begin{enumerate}
+	\item It cyclically sends metadata packets for all files so both existing receivers and late joiners can synchronize file state.
+
+	\item It keeps a receive channel open for \texttt{NACK} packets. When a \texttt{NACK} arrives, it validates the file id and retransmits only the requested missing sequence range.
+\end{enumerate}
+
+This keeps idle load low (only periodic metadata cycles, e.g., every 3 seconds) while still supporting new or reconnected joiners. Once a joiner receives metadata, it requests exactly what it is missing via \texttt{NACK}, causing a temporary burst of retransmission only when recovery is needed.
+
 \subsection*{Receiver}
+
+Receivers populate per-file trackers on \texttt{METADATA}. Trackers keep progress state, including received-chunk count and missing chunks. On metadata reception events, receivers run a repair check and send \texttt{NACK}s for missing ranges when needed.
+
+Receivers also use backoff to reduce \texttt{NACK} implosion:
+
+1. At startup, each tracker waits briefly before issuing NACKs.
+
+2. Before sending \texttt{NACK}s, receivers back off and check whether another receiver already requested the same file, then suppress or delay their own requests.
+
+This keeps repair traffic selective while controlling synchronized NACK bursts.
+
+Worst-case load happens when receivers join one-by-one and each new receiver joins right after the previous receiver is fully served. Then retransmissions are not shared, so each receiver effectively triggers another full-file repair window. Let $S$ be file size (bytes) and $R$ be the number of such late/reconnected receivers:
+
+$$
+L_{\text{worst}} \approx (R+1)S
+$$
+
+where $S$ is the original multicast and $RS$ is worst-case repair traffic. Ignoring small control overhead, total load scales linearly with staggered joiners.
 
 \subsection*{Comparison to FLUTE}
 
-A different multicast protocl is File Delivery over Unidirectional Transport (FLUTE), where the sender does not have a receive channel. Instead, it cyclically sends all data chunks perpetually. Reliability is ensured by receivers' eventual consistency, as they will receive any missing chunks in the next send cycle.
+A different multicast protocol is FLUTE (File Delivery over Unidirectional Transport), where the sender has no receive channel. It continuously cycles all data chunks, and reliability comes from eventual consistency, as missing chunks are recovered in later cycles.
 
-We preferred the simplicity of FLUTE but did not pick this protocol as the network load is although less volatile, is higher especially on situations where minimal amount of new data transmission is needed, such as when there are no current new joiners, or some receivers are only missing couple chunks. As one of the requirement is to minimize network load by minimizing control packets and data packets. Therefore, we use our current protocol.
+We like FLUTE's simplicity, but we did not choose it because its load is generally higher when little retransmission is needed, for example with no new joiners or when receivers miss only a few chunks. Our main requirement is minimizing unnecessary control and data traffic, so we use a \texttt{NACK}-driven selective-repair protocol.
 
 \section*{Integrity Verification}
 
 \subsection*{Chunk-Level Checksum}
 
-Chunk-level checksum is computed at data packet generation time on the sender side and carried with each DATA packet. On the receiver side, every incoming chunk is validated against that checksum before being accepted. If the chunk-level checksum fails, we treat it as a bad chunk and immediately re-request that chunk range using a NACK.
+Chunk-level checksum is computed when each \texttt{DATA} packet is generated and carried with that packet. The receiver validates every incoming chunk before accepting it. If chunk-level checksum fails, the receiver treats it as bad data and immediately re-requests that chunk range via \texttt{NACK}.
 
 \subsection*{File-Level Combined Checksum}
 
-File-level checksum is computed on sender initialization (before transmission starts) and included in metadata. After a receiver has all chunks for a file, it computes the combined file checksum locally and compares it with the expected value from metadata.
+File-level checksum is computed at sender initialization (before transmission) and included in metadata. After a receiver has all chunks for a file, it computes a combined file checksum locally and compares it to the expected metadata value.
+The combination is done incrementally over chunks: each chunk checksum is mixed with its sequence number and payload length (including a sequence-dependent rotate), then XORed into a running checksum.
 
-This gives us a two-step guard to ensure files are intact: first at chunk granularity during reception, then at whole-file granularity at completion. If file-level verification fails, we work under the assumption that individual chunks were fine when received and that some local corruption happened after/during assembly. Since it is difficult to reliably pinpoint which local chunk(s) got corrupted in that case, we NACK the whole file range and re-fetch the full file.
+This is a two-step guard for file integrity: chunk-level during reception, then file-level at completion. If file-level verification fails, we assume chunks were valid on receipt and corruption happened locally during or after assembly. Since it is hard to pinpoint the corrupted local chunk(s), we \texttt{NACK} the whole file range and re-fetch the full file.
 
 
 
