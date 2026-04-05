@@ -23,12 +23,12 @@
 
 \section*{Protocol Design}
 
-Our protocol uses three UDP multicast packet types: \texttt{METADATA}, \texttt{DATA}, and \texttt{NACK}. All packets share a small header with packet type and payload size. \texttt{METADATA} carries file id, file size, chunk count, chunk size, file checksum, and filename. \texttt{DATA} carries one chunk plus its chunk checksum. \texttt{NACK} carries an inclusive missing-chunk range for repair. The overall model is sender-driven multicast with receiver-driven selective repair.
+Our protocol uses three UDP multicast packet types: \texttt{METADATA}, \texttt{DATA}, and \texttt{NACK}. All packets share a small header with packet type and payload size. \texttt{METADATA} carries file id, file size, chunk count, chunk size, file checksum, and filename. \texttt{DATA} carries one chunk plus its chunk checksum. \texttt{NACK} carries an inclusive missing-chunk range for repair. The overall model is a \texttt{NACK} oriented protocol with a stateless sender and stateful receivers that actively request missing data chunks.
 
 
 \subsection*{Sender}
 
-Sender has two core responsibilities:
+The sender has two core responsibilities:
 
 \begin{enumerate}
 	\item It cyclically sends metadata packets for all files so both existing receivers and late joiners can synchronize file state.
@@ -47,7 +47,7 @@ Receivers also use backoff to reduce \texttt{NACK} implosion:
 
 1. At startup, each tracker waits briefly before issuing NACKs.
 
-2. Before sending \texttt{NACK}s, receivers back off and check whether another receiver already requested the same file, then suppress or delay their own requests.
+2. Before sending \texttt{NACK}s, receivers back off and check whether another receiver already requested the same file, then suppress their own requests.
 
 This keeps repair traffic selective while controlling synchronized NACK bursts.
 
@@ -63,7 +63,7 @@ where $S$ is the original multicast and $RS$ is worst-case repair traffic. Ignor
 
 A different multicast protocol is FLUTE (File Delivery over Unidirectional Transport), where the sender has no receive channel. It continuously cycles all data chunks, and reliability comes from eventual consistency, as missing chunks are recovered in later cycles.
 
-We like FLUTE's simplicity, but we did not choose it because its load is generally higher when little retransmission is needed, for example with no new joiners or when receivers miss only a few chunks. Our main requirement is minimizing unnecessary control and data traffic, so we use a \texttt{NACK}-driven selective-repair protocol.
+We liked FLUTE's simplicity, but we did not choose it because its load is generally higher when little retransmission is needed, for example with no new joiners or when receivers miss only a few chunks. Our main requirement is minimizing unnecessary control and data traffic, so we use a \texttt{NACK}-driven selective-repair protocol.
 
 \section*{Integrity Verification}
 
