@@ -1,2 +1,8 @@
 share/
 *dsYM*
+
+rcv*/
+
+runs/*
+
+*.log
