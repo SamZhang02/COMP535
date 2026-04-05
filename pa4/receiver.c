@@ -8,10 +8,12 @@
 #include <errno.h>
 #include <signal.h>
 #include <stddef.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 
 #define MCAST_ADDR "239.0.0.1"
@@ -20,6 +22,9 @@
 #define RECV_BUF_SIZE 65535
 #define NACK_IDLE_GAP_MS 200ULL
 #define NACK_FILE_COOLDOWN_MS 500ULL
+#define NACK_ROUND_JITTER_MS 200ULL
+#define NACK_SUPPRESS_MS 150ULL
+#define NACK_SUPPRESS_JITTER_MS 150ULL
 #define USAGE "Usage: %s [-d output_dir]\n"
 
 static volatile sig_atomic_t keep_running = 1;
@@ -101,7 +106,37 @@ send_missing_chunk_nacks(FileTracker *tracker, MCast *mcast, uint64_t now_ms) {
   }
 
   if (sent_any_nack) {
-    tracker->next_nack_at_ms = now_ms + NACK_FILE_COOLDOWN_MS;
+    tracker->next_nack_at_ms = now_ms + NACK_FILE_COOLDOWN_MS +
+                               (uint64_t)(rand() % (NACK_ROUND_JITTER_MS + 1));
+  }
+}
+
+static void handle_nack_packet(const unsigned char *buf,
+                               int received,
+                               DList *filetrackers) {
+  if (received < (int)sizeof(NackPacket)) {
+    log_info("  nack packet too short (%d bytes)\n", received);
+    return;
+  }
+
+  const NackPacket *pkt = (const NackPacket *)buf;
+  uint32_t lookup_file_id = pkt->file_id;
+  DListNode *tracker_node =
+      dlist_find(filetrackers, &lookup_file_id, filetracker_cmp_by_id);
+  if (!tracker_node) {
+    return;
+  }
+
+  FileTracker *tracker = (FileTracker *)tracker_node->data;
+  if (!tracker || is_file_complete(tracker)) {
+    return;
+  }
+
+  uint64_t now_ms = filetracker_now_ms();
+  uint64_t suppress_until = now_ms + NACK_SUPPRESS_MS +
+                            (uint64_t)(rand() % (NACK_SUPPRESS_JITTER_MS + 1));
+  if (suppress_until > tracker->next_nack_at_ms) {
+    tracker->next_nack_at_ms = suppress_until;
   }
 }
 
@@ -325,6 +360,9 @@ static void handle_packet(const unsigned char *buf,
   case PKT_TYPE_DATA:
     handle_data_packet(buf, received, filetrackers);
     break;
+  case PKT_TYPE_NACK:
+    handle_nack_packet(buf, received, filetrackers);
+    break;
   default:
     printf("  no handler for packet type=%d\n", hdr->type);
     break;
@@ -337,6 +375,7 @@ static void filetracker_free_void(void *data) {
 
 int main(int argc, char *argv[]) {
   signal(SIGINT, handle_sigint);
+  srand((unsigned int)(time(NULL) ^ (unsigned int)getpid()));
 
   const char *output_dir = RECEIVED_FILES_DIR;
   int opt;
