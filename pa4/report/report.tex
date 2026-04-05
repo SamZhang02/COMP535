@@ -16,10 +16,10 @@
 \setlength{\parindent}{0ex} 
 \setlength{\parskip}{5pt} % Adjusts the space between paragraphs
 
-\section*{Overview}
-
-
-We introduce a \texttt{NACK}-oriented reliable multicast file-sharing protocol that supports full file transfer for both existing receivers and late joiners with low network and host overhead. The sender is effectively stateless and cyclically transmits control packets with metadata for all files. Receivers are stateful: they track received chunks and request missing chunk ranges through \texttt{NACK} packets. Integrity is checked at two levels: per-chunk during reception and file-level at completion. The protocol gives high reliability and fast catch-up for new joiners, but worst-case receiver swarms can still generate substantial repair traffic.
+% \section*{Overview}
+%
+%
+% We introduce a \texttt{NACK}-oriented reliable multicast file-sharing protocol that supports full file transfer for both existing receivers and late joiners with low network and host overhead. The sender is effectively stateless and cyclically transmits control packets with metadata for all files. Receivers are stateful: they track received chunks and request missing chunk ranges through \texttt{NACK} packets. Integrity is checked at two levels: per-chunk during reception and file-level at completion. The protocol gives high reliability and fast catch-up for new joiners, but worst-case receiver swarms can still generate substantial repair traffic.
 
 \section*{Protocol Design}
 
@@ -37,10 +37,11 @@ Sender has two core responsibilities:
 \end{enumerate}
 
 This keeps idle load low (only periodic metadata cycles, e.g., every 3 seconds) while still supporting new or reconnected joiners. Once a joiner receives metadata, it requests exactly what it is missing via \texttt{NACK}, causing a temporary burst of retransmission only when recovery is needed.
+Receiver crashes are handled the same as new joiners: they simply rejoin and fetch the files again.
 
 \subsection*{Receiver}
 
-Receivers populate per-file trackers on \texttt{METADATA}. Trackers keep progress state, including received-chunk count and missing chunks. On metadata reception events, receivers run a repair check and send \texttt{NACK}s for missing ranges when needed.
+Receivers populate per-file trackers on \texttt{METADATA}. Trackers keep progress state, including received-chunk count and missing chunks. On packet reception events or at most one second difference, receivers run a repair check and send \texttt{NACK}s for missing ranges when needed.
 
 Receivers also use backoff to reduce \texttt{NACK} implosion:
 
@@ -70,18 +71,21 @@ We like FLUTE's simplicity, but we did not choose it because its load is general
 
 Chunk-level checksum is computed when each \texttt{DATA} packet is generated and carried with that packet. The receiver validates every incoming chunk before accepting it. If chunk-level checksum fails, the receiver treats it as bad data and immediately re-requests that chunk range via \texttt{NACK}.
 
-\subsection*{File-Level Combined Checksum}
+\subsection*{File-Level Checksum}
 
-File-level checksum is computed at sender initialization (before transmission) and included in metadata. After a receiver has all chunks for a file, it computes a combined file checksum locally and compares it to the expected metadata value.
-The combination is done incrementally over chunks: each chunk checksum is mixed with its sequence number and payload length (including a sequence-dependent rotate), then XORed into a running checksum.
+File-level checksum is computed at sender initialization (before transmission) and included in metadata. The sender computes it over the full file byte stream, independent of chunk boundaries.
+After a receiver has all chunks for a file, it validates the reconstructed on-disk file by recomputing the same whole-file checksum and comparing it to the expected metadata value.
 
-This is a two-step guard for file integrity: chunk-level during reception, then file-level at completion. If file-level verification fails, we assume chunks were valid on receipt and corruption happened locally during or after assembly. Since it is hard to pinpoint the corrupted local chunk(s), we \texttt{NACK} the whole file range and re-fetch the full file.
-
-
-
+This is a two-step guard for file integrity. If file-level verification fails, we assume chunks were valid on receipt and corruption happened locally during or after assembly. Since it is hard to pinpoint the corrupted local chunk(s), we \texttt{NACK} the whole file range and re-fetch the full file.
 
 \section*{Performance Benchmark}
 
 \section*{Limitations}
+
+\begin{enumerate}
+\item As discussed above, staggered late joiners can create a long-lasting throughput spike, which can be expensive on the network.
+
+\item One scalability direction we considered is splitting sender work across threads: one thread dedicated to cyclic metadata sending, and another dedicated to \texttt{NACK} handling with queued range retrieval in a round-robin style for fair chunk distribution. In practice, our C implementation is fast enough that the single-threaded design bottlenecks first on OS socket buffers, so we did not need to implement this yet. The current setup should already scale high, but these optimizations can be key to maximum scaling.
+\end{enumerate}
 
 \end{document}
