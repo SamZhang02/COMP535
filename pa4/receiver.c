@@ -372,6 +372,21 @@ static void filetracker_free_void(void *data) {
   filetracker_destroy((FileTracker *)data);
 }
 
+static int all_files_confirmed_received(DList *filetrackers) {
+  if (!filetrackers || !filetrackers->head) {
+    return 0;
+  }
+
+  for (DListNode *node = filetrackers->head; node; node = node->next) {
+    FileTracker *tracker = (FileTracker *)node->data;
+    if (!tracker || !is_file_complete(tracker)) {
+      return 0;
+    }
+  }
+
+  return 1;
+}
+
 int main(int argc, char *argv[]) {
   signal(SIGINT, handle_sigint);
   srand((unsigned int)(time(NULL) ^ (unsigned int)getpid()));
@@ -403,6 +418,7 @@ int main(int argc, char *argv[]) {
   }
 
   DList *filetrackers = dlist_create(filetracker_free_void);
+  int ack_sent_for_current_set = 0;
 
   MCast *mcast = multicast_init(MCAST_ADDR, SENDER_PORT, RECEIVER_PORT);
   multicast_setup_recv(mcast);
@@ -412,6 +428,20 @@ int main(int argc, char *argv[]) {
 
   while (keep_running) {
     send_pending_nacks(filetrackers, mcast);
+
+    int all_complete = all_files_confirmed_received(filetrackers);
+    if (all_complete && !ack_sent_for_current_set) {
+      AckPacket ack = {0};
+      ack.header.type = PKT_TYPE_ACK;
+      ack.header.payload_size = 0;
+      multicast_send(mcast, &ack, sizeof(AckPacket));
+
+      log_info("All files confirmed received. Sent ACK packet.\n");
+
+      ack_sent_for_current_set = 1;
+    } else if (!all_complete) {
+      ack_sent_for_current_set = 0;
+    }
 
     int ready = multicast_check_receive(mcast);
 

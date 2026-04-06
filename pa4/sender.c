@@ -22,6 +22,30 @@
 #define CYCLE_LENGTH_SECONDS 3
 #define SEND_PACE_US 10U
 
+// ---- Helper code for data collection, not part of protocol
+typedef struct {
+  time_t send_start_time;
+  int num_packets_send;
+} Statistics;
+
+Statistics *stats_init() {
+  Statistics *stats = malloc(sizeof(Statistics));
+
+  stats->send_start_time = time(NULL);
+  stats->num_packets_send = 0;
+
+  return stats;
+}
+
+static void multicast_send_with_stats(MCast *mcast,
+                                      void *data,
+                                      size_t size,
+                                      Statistics *stats) {
+  multicast_send(mcast, data, size);
+  stats->num_packets_send++;
+}
+// --------
+
 static volatile sig_atomic_t keep_running = 1;
 
 static void handle_sigint(int signum) {
@@ -80,7 +104,8 @@ static void handle_nack_packet(const unsigned char *buf,
                                MetadataPacket file_catalog[],
                                int num_files,
                                MCast *mcast,
-                               int chunk_size) {
+                               int chunk_size,
+                               Statistics *stats) {
   if (received < (int)sizeof(NackPacket)) {
     log_info("  nack packet too short (%d bytes)\n", received);
     return;
@@ -125,7 +150,7 @@ static void handle_nack_packet(const unsigned char *buf,
              data_packet->seq_num,
              size);
 
-    multicast_send(mcast, data_packet, size);
+    multicast_send_with_stats(mcast, data_packet, size, stats);
 
     free(data_packet);
 
@@ -135,24 +160,52 @@ static void handle_nack_packet(const unsigned char *buf,
   }
 }
 
+static void handle_ack_packet(const unsigned char *buf,
+                              int received,
+                              const Statistics *stats) {
+  if (received < (int)sizeof(AckPacket)) {
+    log_info("  ack packet too short (%d bytes)\n", received);
+    return;
+  }
+
+  (void)buf;
+  time_t elapsed_seconds = time(NULL) - stats->send_start_time;
+  time_t elapsed_seconds_rounded_up = (elapsed_seconds > 0) ? elapsed_seconds : 1;
+  double packets_per_second =
+      (double)stats->num_packets_send / (double)elapsed_seconds_rounded_up;
+
+  log_info("Received ACK packet: num_packets_send=%d, elapsed_seconds=%ld, "
+           "throughput_pps=%.2f\n",
+           stats->num_packets_send,
+           (long)elapsed_seconds_rounded_up,
+           packets_per_second);
+}
+
 static void handle_packet(const unsigned char *buf,
                           int received,
                           MetadataPacket file_catalog[],
                           int num_files,
                           MCast *mcast,
-                          int chunk_size
+                          int chunk_size,
+                          Statistics *stats
 
 ) {
   const PacketHeader *hdr = (const PacketHeader *)buf;
 
   if (hdr->type == PKT_TYPE_NACK) {
     handle_nack_packet(
-        buf, received, file_catalog, num_files, mcast, chunk_size);
+        buf, received, file_catalog, num_files, mcast, chunk_size, stats);
+  }
+
+  if (hdr->type == PKT_TYPE_ACK) {
+    handle_ack_packet(buf, received, stats);
   }
 }
 
 int main(int argc, char *argv[]) {
   signal(SIGINT, handle_sigint);
+
+  Statistics *stats = stats_init();
 
   int chunk_size = DEFAULT_CHUNK_SIZE;
   int opt;
@@ -224,7 +277,8 @@ int main(int argc, char *argv[]) {
 
   for (int i = 0; i < num_files; i++) {
     log_info("Sending metadata packet, file_id=%u\n", file_catalog[i].file_id);
-    multicast_send(mcast, &file_catalog[i], sizeof(MetadataPacket));
+    multicast_send_with_stats(
+        mcast, &file_catalog[i], sizeof(MetadataPacket), stats);
   }
 
   for (int i = 0; i < num_files; i++) {
@@ -243,7 +297,7 @@ int main(int argc, char *argv[]) {
                data_packet->seq_num,
                size);
 
-      multicast_send(mcast, data_packet, size);
+      multicast_send_with_stats(mcast, data_packet, size, stats);
 
       free(data_packet);
 
@@ -278,7 +332,7 @@ int main(int argc, char *argv[]) {
         continue;
       } else {
         handle_packet(
-            buf, received, file_catalog, num_files, mcast, chunk_size);
+            buf, received, file_catalog, num_files, mcast, chunk_size, stats);
       }
     }
 
@@ -286,7 +340,8 @@ int main(int argc, char *argv[]) {
     if (current_time - last_send_time >= CYCLE_LENGTH_SECONDS) {
       log_info("Sending cyclical control packets.\n");
       for (int i = 0; i < num_files; i++) {
-        multicast_send(mcast, &file_catalog[i], sizeof(MetadataPacket));
+        multicast_send_with_stats(
+            mcast, &file_catalog[i], sizeof(MetadataPacket), stats);
       }
 
       last_send_time = current_time;

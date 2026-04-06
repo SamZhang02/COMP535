@@ -9,6 +9,7 @@ typedef uint8_t PacketType;
 #define PKT_TYPE_METADATA 0
 #define PKT_TYPE_DATA 1
 #define PKT_TYPE_NACK 2
+#define PKT_TYPE_ACK 3
 
 const char *packet_type_to_string(PacketType type);
 
@@ -44,5 +45,9 @@ typedef struct __attribute__((packed)) {
   uint32_t missing_seq_num_start;
   uint32_t missing_seq_num_end;
 } NackPacket;
+
+typedef struct __attribute__((packed)) {
+  PacketHeader header; // type = PKT_TYPE_ACK
+} AckPacket;
 
 #endif
