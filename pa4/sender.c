@@ -156,9 +156,7 @@ static void handle_nack_packet(const unsigned char *buf,
   }
 }
 
-static void handle_ack_packet(const unsigned char *buf,
-                              int received,
-                              const Statistics *stats) {
+static void handle_ack_packet(int received, const Statistics *stats) {
   if (received < (int)sizeof(AckPacket)) {
     log_info("  ack packet too short (%d bytes)\n", received);
     return;
@@ -202,7 +200,7 @@ static void handle_packet(const unsigned char *buf,
   }
 
   if (hdr->type == PKT_TYPE_ACK) {
-    handle_ack_packet(buf, received, stats);
+    handle_ack_packet(received, stats);
   }
 }
 
