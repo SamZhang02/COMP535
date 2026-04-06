@@ -6,3 +6,5 @@ rcv*/
 runs/*
 
 *.log
+
+testfile*
