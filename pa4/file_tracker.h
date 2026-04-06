@@ -23,7 +23,13 @@ typedef struct {
   // implosion with other receivers
   uint8_t wait_data;
   uint64_t wait_until_ms;
+
+  // If we just received data, we will wait a bit to nack because there might be
+  // more data coming
   uint64_t last_data_ms;
+
+  // This is a threshold for any other operations where we want to surppress our
+  // nack until some point
   uint64_t next_nack_at_ms;
 } FileTracker;
 
