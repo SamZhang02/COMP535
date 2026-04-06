@@ -12,10 +12,10 @@
     printf(__VA_ARGS__);                                                       \
   } while (0)
 
-#define log_info(...)                                                          \
-  do {                                                                         \
-    log_with_level("INFO", __VA_ARGS__);                                       \
-  } while (0)
+#define log_info(...)
+// do { \
+//   log_with_level("INFO", __VA_ARGS__); \
+// } while (0)
 
 #ifdef DEBUG
 #define log_debug(...)                                                         \
