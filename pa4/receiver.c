@@ -158,19 +158,19 @@ static void handle_metadata_packet(const unsigned char *buf,
                                    MCast *mcast) {
   (void)mcast;
   if (received < (int)sizeof(MetadataPacket)) {
-    printf("  metadata packet too short (%d bytes)\n", received);
+    // printf("  metadata packet too short (%d bytes)\n", received);
     return;
   }
 
   const MetadataPacket *pkt = (const MetadataPacket *)buf;
-  printf("  metadata: file_id=%u, file_size=%u, chunks=%u, chunk_size=%u, "
-         "file_checksum=%u, filename=%s\n",
-         pkt->file_id,
-         pkt->file_size,
-         pkt->num_chunks,
-         pkt->chunk_size,
-         pkt->file_checksum,
-         pkt->filename);
+  // printf("  metadata: file_id=%u, file_size=%u, chunks=%u, chunk_size=%u, "
+  //        "file_checksum=%u, filename=%s\n",
+  //        pkt->file_id,
+  //        pkt->file_size,
+  //        pkt->num_chunks,
+  //        pkt->chunk_size,
+  //        pkt->file_checksum,
+  //        pkt->filename);
 
   // Check file trackers, if does not exist create it
   uint32_t file_id = pkt->file_id;
@@ -213,7 +213,7 @@ static void handle_data_packet(const unsigned char *buf,
                                int received,
                                DList *filetrackers) {
   if (received < (int)sizeof(DataPacket)) {
-    printf("  data packet too short (%d bytes)\n", received);
+    // printf("  data packet too short (%d bytes)\n", received);
     return;
   }
 
@@ -235,11 +235,11 @@ static void handle_data_packet(const unsigned char *buf,
 
   int checksum_ok = checksum_decode(pkt, payload_len);
 
-  printf("  data: file_id=%u, seq=%u, checksum=%s(%u)\n",
-         pkt->file_id,
-         pkt->seq_num,
-         checksum_ok ? "VALID" : "INVALID",
-         pkt->checksum);
+  // printf("  data: file_id=%u, seq=%u, checksum=%s(%u)\n",
+  //        pkt->file_id,
+  //        pkt->seq_num,
+  //        checksum_ok ? "VALID" : "INVALID",
+  //        pkt->checksum);
 
   uint32_t lookup_file_id = pkt->file_id;
   DListNode *tracker_node =
@@ -363,7 +363,7 @@ static void handle_packet(const unsigned char *buf,
     handle_nack_packet(buf, received, filetrackers);
     break;
   default:
-    printf("  no handler for packet type=%d\n", hdr->type);
+    // printf("  no handler for packet type=%d\n", hdr->type);
     break;
   }
 }
