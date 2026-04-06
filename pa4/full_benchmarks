@@ -1,0 +1,26 @@
+==> benchmark_0.5 <==
+Received ACK packet: num_packets_send=131073, elapsed_ms=2709.43, throughput_pps=48376.63
+
+==> benchmark_1kb <==
+Received ACK packet: num_packets_send=72860, elapsed_ms=3669.47, throughput_pps=19855.75
+
+==> benchmark_2kb <==
+Received ACK packet: num_packets_send=43574, elapsed_ms=3472.97, throughput_pps=12546.62
+
+==> benchmark_4kb <==
+Received ACK packet: num_packets_send=24689, elapsed_ms=3415.20, throughput_pps=7229.16
+
+==> benchmark_0.5_wifi <==
+Received ACK packet: num_packets_send=131073, elapsed_ms=3036.40, throughput_pps=43167.25
+
+==> benchmark_1kb_wifi <==
+Received ACK packet: num_packets_send=65537, elapsed_ms=2569.36, throughput_pps=25507.08
+
+==> benchmark_2kb_wifi <==
+Received ACK packet: num_packets_send=46472, elapsed_ms=3577.30, throughput_pps=12990.81
+
+==> benchmark_4kb_wifi <==
+Received ACK packet: num_packets_send=22030, elapsed_ms=4531.33, throughput_pps=4861.70
+
+
+
