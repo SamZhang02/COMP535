@@ -20,7 +20,7 @@
 #define DEFAULT_CHUNK_SIZE 1024
 
 #define CYCLE_LENGTH_SECONDS 3
-#define SEND_PACE_US 10U
+#define SEND_PACE_US 0U
 
 // ---- Helper code for data collection, not part of protocol
 typedef struct {
@@ -170,7 +170,8 @@ static void handle_ack_packet(const unsigned char *buf,
 
   (void)buf;
   time_t elapsed_seconds = time(NULL) - stats->send_start_time;
-  time_t elapsed_seconds_rounded_up = (elapsed_seconds > 0) ? elapsed_seconds : 1;
+  time_t elapsed_seconds_rounded_up =
+      (elapsed_seconds > 0) ? elapsed_seconds : 1;
   double packets_per_second =
       (double)stats->num_packets_send / (double)elapsed_seconds_rounded_up;
 
