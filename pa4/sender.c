@@ -183,11 +183,11 @@ static void handle_ack_packet(const unsigned char *buf,
   double packets_per_second =
       ((double)stats->num_packets_send / elapsed_ms) * 1000.0;
 
-  log_info("Received ACK packet: num_packets_send=%d, elapsed_ms=%.2f, "
-           "throughput_pps=%.2f\n",
-           stats->num_packets_send,
-           elapsed_ms,
-           packets_per_second);
+  printf("Received ACK packet: num_packets_send=%d, elapsed_ms=%.2f, "
+         "throughput_pps=%.2f\n",
+         stats->num_packets_send,
+         elapsed_ms,
+         packets_per_second);
 }
 
 static void handle_packet(const unsigned char *buf,
