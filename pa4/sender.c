@@ -24,14 +24,15 @@
 
 // ---- Helper code for data collection, not part of protocol
 typedef struct {
-  time_t send_start_time;
+  struct timespec send_start_time;
   int num_packets_send;
 } Statistics;
 
 Statistics *stats_init() {
   Statistics *stats = malloc(sizeof(Statistics));
 
-  stats->send_start_time = time(NULL);
+  clock_gettime(CLOCK_MONOTONIC, &stats->send_start_time);
+  ;
   stats->num_packets_send = 0;
 
   return stats;
@@ -168,17 +169,24 @@ static void handle_ack_packet(const unsigned char *buf,
     return;
   }
 
-  (void)buf;
-  time_t elapsed_seconds = time(NULL) - stats->send_start_time;
-  time_t elapsed_seconds_rounded_up =
-      (elapsed_seconds > 0) ? elapsed_seconds : 1;
-  double packets_per_second =
-      (double)stats->num_packets_send / (double)elapsed_seconds_rounded_up;
+  struct timespec current_time;
+  clock_gettime(CLOCK_MONOTONIC, &current_time);
 
-  log_info("Received ACK packet: num_packets_send=%d, elapsed_seconds=%ld, "
+  double elapsed_ms =
+      (current_time.tv_sec - stats->send_start_time.tv_sec) * 1000.0 +
+      (current_time.tv_nsec - stats->send_start_time.tv_nsec) / 1000000.0;
+
+  if (elapsed_ms <= 0.0) {
+    elapsed_ms = 0.001; // 1 microsecond floor in case it sends too fast
+  }
+
+  double packets_per_second =
+      ((double)stats->num_packets_send / elapsed_ms) * 1000.0;
+
+  log_info("Received ACK packet: num_packets_send=%d, elapsed_ms=%.2f, "
            "throughput_pps=%.2f\n",
            stats->num_packets_send,
-           (long)elapsed_seconds_rounded_up,
+           elapsed_ms,
            packets_per_second);
 }
 
