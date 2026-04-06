@@ -1,5 +1,6 @@
 #include "multicast.h"
 #include <errno.h>
+#include <sched.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -47,8 +48,12 @@ int multicast_send(MCast *m, void *msg, int msglen) {
   int cnt = sendto(
       m->sock, msg, msglen, 0, (struct sockaddr *)&(m->addr), m->addrlen);
   if (cnt < 0) {
-    perror("sendto");
-    exit(1);
+    if (errno == ENOBUFS) {
+      sched_yield();
+    } else {
+      perror("sendto");
+      exit(1);
+    }
   }
   return cnt;
 }
