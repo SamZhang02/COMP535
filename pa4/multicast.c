@@ -22,6 +22,13 @@ MCast *multicast_init(char *mcast_addr,
   setsockopt(m->sock, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
   setsockopt(m->sock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
 
+  // For benchmarking, we set the route's buffer to 25mb as a control size
+  int buf_size = 26214400;
+  if (setsockopt(m->sock, SOL_SOCKET, SO_RCVBUF, &buf_size, sizeof(buf_size)) <
+      0) {
+    perror("Error setting SO_RCVBUF");
+  }
+
   bzero((char *)&(m->addr), sizeof(m->addr));
   m->addr.sin_family = AF_INET;
   m->addr.sin_addr.s_addr = inet_addr(mcast_addr);
