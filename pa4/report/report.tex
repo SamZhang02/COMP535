@@ -5,6 +5,7 @@
 \usepackage[]{amsthm} 
 \usepackage[]{amsmath} 
 \usepackage[]{amssymb} 
+\usepackage{titling}
 
 \title{Multicast file sharing -- Report}
 \author{Kevin Wu, Sam Zhang}
@@ -16,10 +17,7 @@
 \setlength{\parindent}{0ex} 
 \setlength{\parskip}{5pt} % Adjusts the space between paragraphs
 
-% \section*{Overview}
-%
-%
-% We introduce a \texttt{NACK}-oriented reliable multicast file-sharing protocol that supports full file transfer for both existing receivers and late joiners with low network and host overhead. The sender is effectively stateless and cyclically transmits control packets with metadata for all files. Receivers are stateful: they track received chunks and request missing chunk ranges through \texttt{NACK} packets. Integrity is checked at two levels: per-chunk during reception and file-level at completion. The protocol gives high reliability and fast catch-up for new joiners, but worst-case receiver swarms can still generate substantial repair traffic.
+\newpage
 
 \section*{Protocol Design}
 
@@ -28,7 +26,7 @@ Our protocol uses three UDP multicast packet types: \texttt{METADATA}, \texttt{D
 
 \subsection*{Sender}
 
-The sender has two core responsibilities:
+The sender performs two tasks:
 
 \begin{enumerate}
 	\item It cyclically sends metadata packets for all files so both existing receivers and late joiners can synchronize file state.
@@ -36,22 +34,13 @@ The sender has two core responsibilities:
 	\item It keeps a receive channel open for \texttt{NACK} packets. When a \texttt{NACK} arrives, it validates the file id and retransmits only the requested missing sequence range.
 \end{enumerate}
 
-This keeps idle load low (only periodic metadata cycles, e.g., every 3 seconds) while still supporting new or reconnected joiners. Once a joiner receives metadata, it requests exactly what it is missing via \texttt{NACK}, causing a temporary burst of retransmission only when recovery is needed.
-Receiver crashes are handled the same as new joiners: they simply rejoin and fetch the files again.
+This keeps idle load low (metadata cycles every 3 seconds) while synchronizing late joining or crashed receivers. It remains stateless, retransmitting specific chunk ranges only upon receiving a validated \texttt{NACK}.
 
 \subsection*{Receiver}
 
-Receivers populate per-file trackers on \texttt{METADATA}. Trackers keep progress state, including received-chunk count and missing chunks. On packet reception events or at most one second difference, receivers run a repair check and send \texttt{NACK}s for missing ranges when needed.
+Receivers maintain per-file trackers and trigger \texttt{NACK} ranges after a 1-second timeout or missing packet event. To prevent \texttt{NACK} implosion, receivers employ randomized startup delays and suppress local NACKs if a matching request (\texttt{NACK} on same file id) is detected on the multicast group."
 
-Receivers also use backoff to reduce \texttt{NACK} implosion:
-
-1. At startup, each tracker waits briefly before issuing NACKs.
-
-2. Before sending \texttt{NACK}s, receivers back off and check whether another receiver already requested the same file, then suppress their own requests.
-
-This keeps repair traffic selective while controlling synchronized NACK bursts.
-
-Worst-case load happens when receivers join one-by-one and each new receiver joins right after the previous receiver is fully served. Then retransmissions are not shared, so each receiver effectively triggers another full-file repair window. Let $S$ be file size (bytes) and $R$ be the number of such late/reconnected receivers:
+Worst-case load happens when receivers join one-by-one and each new receiver joins right after the previous receiver is fully served. Let $S$ be file size (bytes) and $R$ be the number of such late/reconnected receivers:
 
 $$
 L_{\text{worst}} \approx (R+1)S
@@ -59,33 +48,72 @@ $$
 
 where $S$ is the original multicast and $RS$ is worst-case repair traffic. Ignoring small control overhead, total load scales linearly with staggered joiners.
 
-\subsection*{Comparison to FLUTE}
-
-A different multicast protocol is FLUTE (File Delivery over Unidirectional Transport), where the sender has no receive channel. It continuously cycles all data chunks, and reliability comes from eventual consistency, as missing chunks are recovered in later cycles.
-
-We liked FLUTE's simplicity, but we did not choose it because its load is generally higher when little retransmission is needed, for example with no new joiners or when receivers miss only a few chunks. Our main requirement is minimizing unnecessary control and data traffic, so we use a \texttt{NACK}-driven selective-repair protocol.
-
 \section*{Integrity Verification}
 
-\subsection*{Chunk-Level Checksum}
+\textbf{Chunk-Level Checksum:} Chunk-level checksum is generated for each \texttt{DATA} packet sent. Receivers validate upon receipt. Failed checksums trigger immediate \texttt{NACK} requests for the affected range.
 
-Chunk-level checksum is computed when each \texttt{DATA} packet is generated and carried with that packet. The receiver validates every incoming chunk before accepting it. If chunk-level checksum fails, the receiver treats it as bad data and immediately re-requests that chunk range via \texttt{NACK}.
-
-\subsection*{File-Level Checksum}
-
-File-level checksum is computed at sender initialization (before transmission) and included in metadata. The sender computes it over the full file byte stream, independent of chunk boundaries.
-After a receiver has all chunks for a file, it validates the reconstructed on-disk file by recomputing the same whole-file checksum and comparing it to the expected metadata value.
-
-This is a two-step guard for file integrity. If file-level verification fails, we assume chunks were valid on receipt and corruption happened locally during or after assembly. Since it is hard to pinpoint the corrupted local chunk(s), we \texttt{NACK} the whole file range and re-fetch the full file.
+\textbf{File-Level Checksum:} Computed over the full byte stream and included in metadata by sender. If the final reconstructed file fails verification, the receiver treats the local assembly as corrupt and \texttt{NACK}s the entire file.
 
 \section*{Performance Benchmark}
+
+To evaluate the real-world performance and bottleneck behavior of our protocol, we benchmarked the transmission of a single 64~MB (67,108,864 bytes) file on a MacBook Pro M3 running macOS 15.6.1. The sender and receiver were tested on the exact same machine over the \texttt{239.0.0.1:5000} multicast group to strictly isolate variables. We modified the OS socket receive and send buffers (\texttt{SO\_RCVBUF} and \texttt{SO\_SNDBUF}) to 25~MB to provide a controlled environment capable of handling high-throughput bursts.
+
+We tested across two distinct network interfaces with varying chunk payload sizes (0.5~KB, 1~KB, 2~KB, and 4~KB) to observe the impact of the transmission medium:
+\begin{enumerate}
+	\item \textbf{Wi-Fi (\texttt{en0}):} Standard wireless interface with an MTU of 1500 bytes.  (MacOS default for \texttt{239.0.0.1})
+    \item \textbf{Loopback (\texttt{lo0}):} Virtual memory interface with an MTU of 16~KB. 
+\end{enumerate}
+
+The test is conducted via three receivers and a sender. We count the number of packets sent from the start of transmission, and stop when the sender receives 3 \texttt{ACK}s (Not part of the protocol, for benchmarking).
+
+\begin{table}[!ht]
+\centering
+\resizebox{\textwidth}{}{
+\begin{tabular}{|c|c|ccc|ccc|}
+\hline
+\textbf{Chunk Size} & \textbf{Expected Packets} & \multicolumn{3}{c|}{\textbf{Loopback (\texttt{lo0})}} & \multicolumn{3}{c|}{\textbf{Wi-Fi (\texttt{en0})}} \\
+& (64 MB File) & Sent & Loss \% & Time (ms) & Sent & Loss \% & Time (ms) \\ \hline
+0.5 KB  & 131,072 & 131,073 & $\sim$0.0\% & 2709.43 & 131,073 & $\sim$0.0\% & 3036.40 \\
+1 KB  & 65,536 & 72,860 & 10.1\% & 3669.47 & 65,537 & $\sim$0.0\% & 2569.36 \\
+2 KB  & 32,768 & 43,574 & 24.8\% & 3472.97 & 46,472 & 29.5\% & 3577.30 \\
+4 KB  & 16,384 & 24,689 & 33.6\% & 3415.20 & 22,030 & 25.6\% & 4531.33 \\ \hline
+\end{tabular}
+}
+
+\caption{Transmission benchmark results showing total packets sent, application-layer packet loss percentage (calculated as dropped packets / total actual packets sent), and elapsed transfer time.}
+\end{table}
+
+\begin{table}[!ht]
+\centering
+\resizebox{\textwidth}{}{
+\begin{tabular}{|c|cc|cc|}
+\hline
+\textbf{Chunk Size} & \multicolumn{2}{c|}{\textbf{Loopback (\texttt{lo0})}} & \multicolumn{2}{c|}{\textbf{Wi-Fi (\texttt{en0})}} \\
+& PPS & Throughput (MB/s) & PPS & Throughput (MB/s) \\ \hline
+0.5 KB & 48,376.63 & 23.62 & 43,167.25 & 21.08 \\
+1 KB   & 19,855.75 & 17.44 & 25,507.08 & 24.91 \\
+2 KB   & 12,546.62 & 18.43 & 12,990.81 & 17.89 \\
+4 KB   & 7,229.16  & 18.74 & 4,861.70  & 14.12 \\ \hline
+\end{tabular}
+}
+\caption{Comparative throughput analysis showing Packets Per Second (PPS) and effective Megabytes Per Second (MB/s) across different network interfaces and chunk sizes.}
+\end{table}
+
+\textbf{Wi-Fi (\texttt{en0}):}
+The 1~KB chunk size yielded the best performance (2569.36~ms) due to a transmission of 0\% loss. We suspect that since both 0.5~KB and 1~KB payloads remain under the 1500-byte MTU, they avoid IP fragmentation; the 1~KB chunk simply outperforms the 0.5~KB size by halving system call overhead. 
+
+Conversely, performance degraded at 2~KB and 4~KB. Because these exceed the MTU, the OS must split a single 4~KB application chunk into three frames, adding delays from fragmentation and re-assembly.
+
+\textbf{Loopback (\texttt{lo0}):} While 0.5~KB chunks achieved near 0\% packet loss, larger chunks showed significant instability; the 4~KB run required 24,689 packets to deliver a 16,384-packet file. 
+
+We suspect this loss results from the interaction to arise from socket buffers. Although 4~KB chunks are theoretically more efficient, their high byte-per-second throughput may have allowed the sender to "burst" data, exceeding instantaneous kernel capacity. Hence, 0.5~KB chunks may have performed best because the increased \texttt{sendto()} overhead acted as a natural rate limiter, preventing buffer overflows.
 
 \section*{Limitations}
 
 \begin{enumerate}
 \item As discussed above, staggered late joiners can create a long-lasting throughput spike, which can be expensive on the network.
 
-\item One scalability direction we considered is splitting sender work across threads: one thread dedicated to cyclic metadata sending, and another dedicated to \texttt{NACK} handling with queued range retrieval in a round-robin style for fair chunk distribution. In practice, our C implementation is fast enough that the single-threaded design bottlenecks first on OS socket buffers, so we did not need to implement this yet. The current setup should already scale high, but these optimizations can be key to maximum scaling.
+\item One scalability direction we considered is splitting sender work across threads: one thread dedicated to cyclic metadata sending, and another dedicated to \texttt{NACK} handling with queued range retrieval in a round-robin style for fair chunk distribution. In practice, our single-threaded, sequential file distribution C implementation is fast enough that tests bottlenecks first on OS socket buffers, so we did not need to implement this. We speculate that the current setup should already scale high, but these optimizations may optimize scalability further.
 \end{enumerate}
 
 \end{document}
