@@ -20,7 +20,6 @@
 #define DEFAULT_CHUNK_SIZE 1024
 
 #define CYCLE_LENGTH_SECONDS 3
-#define SEND_PACE_US 0U
 
 // ---- Helper code for data collection, not part of protocol
 typedef struct {
@@ -154,10 +153,6 @@ static void handle_nack_packet(const unsigned char *buf,
     multicast_send_with_stats(mcast, data_packet, size, stats);
 
     free(data_packet);
-
-    // Since we might send a lot of packets at once, we add a small delay
-    // between each send
-    usleep(SEND_PACE_US);
   }
 }
 
@@ -309,8 +304,6 @@ int main(int argc, char *argv[]) {
       multicast_send_with_stats(mcast, data_packet, size, stats);
 
       free(data_packet);
-
-      usleep(SEND_PACE_US);
     }
   }
 
